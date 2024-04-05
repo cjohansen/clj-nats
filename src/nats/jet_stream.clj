@@ -1,8 +1,9 @@
 (ns nats.jet-stream
   (:require [nats.cluster :as cluster])
   (:import (io.nats.client.api CompressionOption ConsumerLimits DiscardPolicy External
-                               Placement Republish RetentionPolicy SourceBase StorageType
-                               StreamConfiguration StreamState Subject SubjectTransform)))
+                               MirrorInfo Placement Republish RetentionPolicy SourceBase
+                               StorageType StreamConfiguration StreamState Subject
+                               SubjectTransform)))
 
 (def retention-policies
   {:nats.retention-policy/limits RetentionPolicy/Limits
@@ -79,16 +80,19 @@
   {:destination (.getDestionation transform)
    :source (.getSource transform)})
 
+(defn external->map [^External external]
+  {:api (.getApi external)
+   :deliver (.getDeliver external)})
+
 (defn source-base->map [^SourceBase mirror]
-  {:external (when-let [external ^External (.getExternal mirror)]
-               {:api (.getApi external)
-                :deliver (.getDeliver external)})
-   :filter-subject (.getFilterSubject mirror)
-   :name (.getName mirror)
-   :source-name (.getSourceName mirror)
-   :start-seq (.getStartSeq mirror)
-   :start-time (.getStartTime mirror)
-   :subject-transforms (map subject-transform->map (.getSubjectTransforms mirror))})
+  (let [external (some-> (.getExternal mirror) external->map)]
+    (cond-> {:filter-subject (.getFilterSubject mirror)
+             :name (.getName mirror)
+             :source-name (.getSourceName mirror)
+             :start-seq (.getStartSeq mirror)
+             :start-time (.getStartTime mirror)
+             :subject-transforms (map subject-transform->map (.getSubjectTransforms mirror))}
+      external (assoc :external external))))
 
 (defn consumer-limits->map [^ConsumerLimits consumer-limits]
   (let [inactive-threshold (.getInactiveThreshold consumer-limits)
@@ -153,6 +157,23 @@
       (.getStreamInfo stream-name)
       .getConfiguration
       configuration->map))
+
+(defn mirror-info->map [^MirrorInfo info]
+  (let [error (.getError info)
+        external (some-> (.getExternal info) external->map)
+        subject-transforms (map subject-transform->map (.getSubjectTransforms info))]
+    (cond-> {:active (.getActive info)
+             :lag (.getLag info)
+             :name (.getName info)}
+      error (assoc :error error)
+      external (assoc :external external)
+      (seq subject-transforms) (assoc :subject-transforms subject-transforms))))
+
+(defn ^:export get-mirror-info [conn stream-name]
+  (-> (.jetStreamManagement conn)
+      (.getStreamInfo stream-name)
+      .getMirrorInfo
+      mirror-info->map))
 
 (defn ^:export get-state [conn stream-name]
   (let [state ^StreamState (-> (.jetStreamManagement conn)
