@@ -1,10 +1,8 @@
 (ns nats.jet-stream
-  (:require [nats.cluster :as cluster]
-            [nats.core :as nats])
-  (:import (io.nats.client.api CompressionOption ConsumerLimits DiscardPolicy
-                               External Placement Republish RetentionPolicy
-                               SourceBase StorageType StreamConfiguration
-                               StreamState Subject SubjectTransform)))
+  (:require [nats.cluster :as cluster])
+  (:import (io.nats.client.api CompressionOption ConsumerLimits DiscardPolicy External
+                               Placement Republish RetentionPolicy SourceBase StorageType
+                               StreamConfiguration StreamState Subject SubjectTransform)))
 
 (def retention-policies
   {:nats.retention-policy/limits RetentionPolicy/Limits
