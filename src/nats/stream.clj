@@ -84,9 +84,9 @@
                         :always (.build)))))
 
 (defn ^:export get-cluster-info [conn stream-name & [options]]
-  (-> (get-stream-info-object conn stream-name options)
-      .getClusterInfo
-      cluster/cluster-info->map))
+  (some-> (get-stream-info-object conn stream-name options)
+          .getClusterInfo
+          cluster/cluster-info->map))
 
 (defn subject-transform->map [^SubjectTransform transform]
   {:destination (.getDestionation transform)
@@ -185,26 +185,37 @@
       .getMirrorInfo
       source-info->map))
 
+(defn stream-state->map [^StreamState state]
+  {:byte-count (.getByteCount state)
+   :consumer-count (.getConsumerCount state)
+   :deleted (into [] (.getDeleted state))
+   :deleted-count (.getDeletedCount state)
+   :first-sequence-number (.getFirstSequence state)
+   :first-time (.getFirstTime state)
+   :last-time (.getLastTime state)
+   :message-count (.getMsgCount state)
+   :subject-count (.getSubjectCount state)
+   :subjects (for [^Subject subject (.getSubjects state)]
+               {:count (.getCount subject)
+                :name (.getName subject)})})
+
 (defn ^:export get-stream-state [conn stream-name & [options]]
-  (let [state ^StreamState (.getStreamState (get-stream-info-object conn stream-name options))]
-    {:byte-count (.getByteCount state)
-     :consumer-count (.getConsumerCount state)
-     :deleted (into [] (.getDeleted state))
-     :deleted-count (.getDeletedCount state)
-     :first-sequence-number (.getFirstSequence state)
-     :first-time (.getFirstTime state)
-     :last-time (.getLastTime state)
-     :message-count (.getMsgCount state)
-     :subject-count (.getSubjectCount state)
-     :subjects (for [^Subject subject (.getSubjects state)]
-                 {:count (.getCount subject)
-                  :name (.getName subject)})}))
+  (-> (get-stream-info-object conn stream-name options)
+      .getStreamState
+      stream-state->map))
 
 (defn stream-info->map [^StreamInfo info]
-  (let [source-infos (map source-info->map (.getSourceInfos info))]
+  (let [source-infos (map source-info->map (.getSourceInfos info))
+        cluster-info (.getClusterInfo info)
+        mirror-info (.getMirrorInfo info)
+        stream-state (.getStreamState info)]
     (cond-> {:create-time (.getCreateTime info)
+             :configuration (configuration->map (.getConfiguration info))
              :timestamp (.getTimestamp info)}
-      (seq source-infos) (assoc :source-infos source-infos))))
+      (seq source-infos) (assoc :source-infos source-infos)
+      cluster-info (assoc :cluster-info (cluster/cluster-info->map cluster-info))
+      mirror-info (assoc :mirror-info (source-info->map mirror-info))
+      stream-state (assoc :stream-state (stream-state->map stream-state)))))
 
 (defn ^:export get-stream-info [conn stream-name & [options]]
   (-> (get-stream-info-object conn stream-name options)
@@ -214,6 +225,12 @@
   (if subject-filter
     (.getStreamNames (.jetStreamManagement conn) subject-filter)
     (.getStreamNames (.jetStreamManagement conn))))
+
+(defn ^:export get-streams [conn & [{:keys [subject-filter]}]]
+  (->> (if subject-filter
+         (.getStreams (.jetStreamManagement conn) subject-filter)
+         (.getStreams (.jetStreamManagement conn)))
+       (map stream-info->map)))
 
 (defn ^{:style/indent 1 :export true} publish
   "Publish a message to a JetStream subject. Performs publish acking if the stream
