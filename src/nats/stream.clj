@@ -3,8 +3,8 @@
             [nats.message :as message])
   (:import (io.nats.client.api CompressionOption ConsumerLimits DiscardPolicy External
                                MirrorInfo Placement Republish RetentionPolicy SourceBase
-                               StorageType StreamConfiguration StreamState Subject
-                               SubjectTransform)))
+                               SourceInfo StorageType StreamConfiguration StreamInfo
+                               StreamState Subject SubjectTransform)))
 
 (def retention-policies
   {:nats.retention-policy/limits RetentionPolicy/Limits
@@ -159,16 +159,19 @@
       .getConfiguration
       configuration->map))
 
+(defmacro get-source-info-map [info]
+  `(let [error# (.getError ~info)
+         external# (some-> (.getExternal ~info) external->map)
+         subject-transforms# (map subject-transform->map (.getSubjectTransforms ~info))]
+     (cond-> {:active (.getActive ~info)
+              :lag (.getLag ~info)
+              :name (.getName ~info)}
+       error# (assoc :error error#)
+       external# (assoc :external external#)
+       (seq subject-transforms#) (assoc :subject-transforms subject-transforms#))))
+
 (defn mirror-info->map [^MirrorInfo info]
-  (let [error (.getError info)
-        external (some-> (.getExternal info) external->map)
-        subject-transforms (map subject-transform->map (.getSubjectTransforms info))]
-    (cond-> {:active (.getActive info)
-             :lag (.getLag info)
-             :name (.getName info)}
-      error (assoc :error error)
-      external (assoc :external external)
-      (seq subject-transforms) (assoc :subject-transforms subject-transforms))))
+  (get-source-info-map info))
 
 (defn ^:export get-mirror-info [conn stream-name]
   (-> (.jetStreamManagement conn)
@@ -176,7 +179,7 @@
       .getMirrorInfo
       mirror-info->map))
 
-(defn ^:export get-state [conn stream-name]
+(defn ^:export get-stream-state [conn stream-name]
   (let [state ^StreamState (-> (.jetStreamManagement conn)
                                (.getStreamInfo stream-name)
                                .getStreamState)]
@@ -192,6 +195,20 @@
      :subjects (for [^Subject subject (.getSubjects state)]
                  {:count (.getCount subject)
                   :name (.getName subject)})}))
+
+(defn source-info->map [^SourceInfo info]
+  (get-source-info-map info))
+
+(defn stream-info->map [^StreamInfo info]
+  (let [source-infos (map source-info->map (.getSourceInfos info))]
+    (cond-> {:create-time (.getCreateTime info)
+             :timestamp (.getTimestamp info)}
+      (seq source-infos) (assoc :source-infos source-infos))))
+
+(defn ^:export get-stream-info [conn stream-name]
+  (-> (.jetStreamManagement conn)
+      (.getStreamInfo stream-name)
+      stream-info->map))
 
 (defn ^{:style/indent 1 :export true} publish
   "Publish a message to a JetStream subject. Performs publish acking if the stream
