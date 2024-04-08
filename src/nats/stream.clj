@@ -2,9 +2,9 @@
   (:require [nats.cluster :as cluster]
             [nats.message :as message])
   (:import (io.nats.client.api CompressionOption ConsumerLimits DiscardPolicy External
-                               MirrorInfo Placement Republish RetentionPolicy SourceBase
-                               SourceInfo StorageType StreamConfiguration StreamInfo
-                               StreamState Subject SubjectTransform)))
+                               Placement Republish RetentionPolicy SourceBase
+                               SourceInfoBase StorageType StreamConfiguration
+                               StreamInfo StreamState Subject SubjectTransform)))
 
 (def retention-policies
   {:nats.retention-policy/limits RetentionPolicy/Limits
@@ -161,25 +161,22 @@
       .getConfiguration
       configuration->map))
 
-(defmacro get-source-info-map [info]
-  `(let [error# (.getError ~info)
-         external# (some-> (.getExternal ~info) external->map)
-         subject-transforms# (map subject-transform->map (.getSubjectTransforms ~info))]
-     (cond-> {:active (.getActive ~info)
-              :lag (.getLag ~info)
-              :name (.getName ~info)}
-       error# (assoc :error error#)
-       external# (assoc :external external#)
-       (seq subject-transforms#) (assoc :subject-transforms subject-transforms#))))
-
-(defn mirror-info->map [^MirrorInfo info]
-  (get-source-info-map info))
+(defn source-info->map [^SourceInfoBase info]
+  (let [error (.getError info)
+        external (some-> (.getExternal info) external->map)
+        subject-transforms (map subject-transform->map (.getSubjectTransforms info))]
+    (cond-> {:active (.getActive info)
+             :lag (.getLag info)
+             :name (.getName info)}
+      error (assoc :error error)
+      external (assoc :external external)
+      (seq subject-transforms) (assoc :subject-transforms subject-transforms))))
 
 (defn ^:export get-mirror-info [conn stream-name]
   (-> (.jetStreamManagement conn)
       (.getStreamInfo stream-name)
       .getMirrorInfo
-      mirror-info->map))
+      source-info->map))
 
 (defn ^:export get-stream-state [conn stream-name]
   (let [state ^StreamState (-> (.jetStreamManagement conn)
@@ -197,9 +194,6 @@
      :subjects (for [^Subject subject (.getSubjects state)]
                  {:count (.getCount subject)
                   :name (.getName subject)})}))
-
-(defn source-info->map [^SourceInfo info]
-  (get-source-info-map info))
 
 (defn stream-info->map [^StreamInfo info]
   (let [source-infos (map source-info->map (.getSourceInfos info))]
