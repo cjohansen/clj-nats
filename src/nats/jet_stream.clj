@@ -1,5 +1,6 @@
 (ns nats.jet-stream
-  (:require [nats.cluster :as cluster])
+  (:require [nats.cluster :as cluster]
+            [nats.message :as message])
   (:import (io.nats.client.api CompressionOption ConsumerLimits DiscardPolicy External
                                MirrorInfo Placement Republish RetentionPolicy SourceBase
                                StorageType StreamConfiguration StreamState Subject
@@ -191,3 +192,20 @@
      :subjects (for [^Subject subject (.getSubjects state)]
                  {:count (.getCount subject)
                   :name (.getName subject)})}))
+
+(defn ^{:style/indent 1 :export true} publish
+  "Publish a message to a JetStream subject. Performs publish acking if the stream
+   requires it. Use `nats.core/publish` for regular PubSub messaging.
+
+  message is a map of:
+
+  - `:subject` - The subject to publish to
+  - `:data` - The message data. Can be any Clojure value
+  - `:headers` - An optional map of string keys to string (or collection of
+                 string) values to set as meta-data on the message.
+  - `:reply-to` - An optional reply-to subject."
+  [conn message]
+  (assert (not (nil? (:subject message))) "Can't publish without data")
+  (assert (not (nil? (:data message))) "Can't publish nil data")
+  (->> (message/build-message message)
+       (.publish (.jetStream conn))))
