@@ -69,11 +69,6 @@
     replicas (.replicas replicas)
     :always (.build)))
 
-(defn ^{:style/indent 1 :export true} create-stream
-  "Adds a stream. See `map->stream-configuration` for valid options in `config`."
-  [conn config]
-  (.addStream (.jetStreamManagement conn) (map->stream-configuration config)))
-
 (defn ^:export get-stream-info-object [conn stream-name & [{:keys [include-deleted-details?
                                                                    filter-subjects]}]]
   (-> (.jetStreamManagement conn)
@@ -231,6 +226,20 @@
          (.getStreams (.jetStreamManagement conn) subject-filter)
          (.getStreams (.jetStreamManagement conn)))
        (map stream-info->map)))
+
+(defn ^{:style/indent 1 :export true} create-stream
+  "Adds a stream. See `map->stream-configuration` for valid options in `config`."
+  [conn config]
+  (-> (.jetStreamManagement conn)
+      (.addStream (map->stream-configuration config))
+      stream-info->map))
+
+(defn ^{:style/indent 1 :export true} update-stream
+  "Updates a stream. See `map->stream-configuration` for valid options in `config`."
+  [conn config]
+  (-> (.jetStreamManagement conn)
+      (.updateStream (map->stream-configuration config))
+      stream-info->map))
 
 (defn ^{:style/indent 1 :export true} publish
   "Publish a message to a JetStream subject. Performs publish acking if the stream
