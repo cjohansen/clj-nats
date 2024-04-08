@@ -210,6 +210,11 @@
   (-> (get-stream-info-object conn stream-name options)
       stream-info->map))
 
+(defn ^:export get-stream-names [conn & [{:keys [subject-filter]}]]
+  (if subject-filter
+    (.getStreamNames (.jetStreamManagement conn) subject-filter)
+    (.getStreamNames (.jetStreamManagement conn))))
+
 (defn ^{:style/indent 1 :export true} publish
   "Publish a message to a JetStream subject. Performs publish acking if the stream
    requires it. Use `nats.core/publish` for regular PubSub messaging.

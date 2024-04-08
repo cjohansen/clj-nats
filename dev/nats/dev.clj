@@ -19,4 +19,6 @@
      :data {:email/to "christian@cjohansen.no"
             :email/subject "Hello, world!"}})
 
+  (stream/get-stream-names conn)
+
   )
