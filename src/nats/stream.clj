@@ -4,7 +4,8 @@
   (:import (io.nats.client.api CompressionOption ConsumerLimits DiscardPolicy External
                                Placement Republish RetentionPolicy SourceBase
                                SourceInfoBase StorageType StreamConfiguration
-                               StreamInfo StreamState Subject SubjectTransform)))
+                               StreamInfo StreamInfoOptions StreamInfoOptions$Builder
+                               StreamState Subject SubjectTransform)))
 
 (def retention-policies
   {:nats.retention-policy/limits RetentionPolicy/Limits
@@ -73,9 +74,17 @@
   [conn config]
   (.addStream (.jetStreamManagement conn) (map->stream-configuration config)))
 
-(defn ^:export get-cluster-info [conn stream-name]
+(defn ^:export get-stream-info-object [conn stream-name & [{:keys [include-deleted-details?
+                                                                   filter-subjects]}]]
   (-> (.jetStreamManagement conn)
-      (.getStreamInfo stream-name)
+      (.getStreamInfo stream-name
+                      (cond-> ^StreamInfoOptions$Builder (StreamInfoOptions/builder)
+                        include-deleted-details? (.deletedDetails)
+                        (seq filter-subjects) (.filterSubjects filter-subjects)
+                        :always (.build)))))
+
+(defn ^:export get-cluster-info [conn stream-name & [options]]
+  (-> (get-stream-info-object conn stream-name options)
       .getClusterInfo
       cluster/cluster-info->map))
 
@@ -155,9 +164,8 @@
       subject-transform (assoc :subject-transform subject-transform)
       template-owner (assoc :template-owner template-owner))))
 
-(defn ^:export get-config [conn stream-name]
-  (-> (.jetStreamManagement conn)
-      (.getStreamInfo stream-name)
+(defn ^:export get-config [conn stream-name & [options]]
+  (-> (get-stream-info-object conn stream-name options)
       .getConfiguration
       configuration->map))
 
@@ -172,16 +180,13 @@
       external (assoc :external external)
       (seq subject-transforms) (assoc :subject-transforms subject-transforms))))
 
-(defn ^:export get-mirror-info [conn stream-name]
-  (-> (.jetStreamManagement conn)
-      (.getStreamInfo stream-name)
+(defn ^:export get-mirror-info [conn stream-name & [options]]
+  (-> (get-stream-info-object conn stream-name options)
       .getMirrorInfo
       source-info->map))
 
-(defn ^:export get-stream-state [conn stream-name]
-  (let [state ^StreamState (-> (.jetStreamManagement conn)
-                               (.getStreamInfo stream-name)
-                               .getStreamState)]
+(defn ^:export get-stream-state [conn stream-name & [options]]
+  (let [state ^StreamState (.getStreamState (get-stream-info-object conn stream-name options))]
     {:byte-count (.getByteCount state)
      :consumer-count (.getConsumerCount state)
      :deleted (into [] (.getDeleted state))
@@ -201,9 +206,8 @@
              :timestamp (.getTimestamp info)}
       (seq source-infos) (assoc :source-infos source-infos))))
 
-(defn ^:export get-stream-info [conn stream-name]
-  (-> (.jetStreamManagement conn)
-      (.getStreamInfo stream-name)
+(defn ^:export get-stream-info [conn stream-name & [options]]
+  (-> (get-stream-info-object conn stream-name options)
       stream-info->map))
 
 (defn ^{:style/indent 1 :export true} publish
