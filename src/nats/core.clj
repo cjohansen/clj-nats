@@ -10,7 +10,7 @@
 
 (defn ^{:style/indent 1 :export true} publish
   "Publish a message. Performs no publish acking; do not use for publishing to a
-  JetStream subject, instead use `nats.jet-stream/publish`.
+  JetStream subject, instead use `nats.stream/publish`.
 
   message is a map of:
 
