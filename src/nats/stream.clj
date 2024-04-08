@@ -35,41 +35,43 @@
 (def storage-type->k
   (into {} (map (juxt second first) storage-types)))
 
+(defn map->stream-configuration [{:keys [name
+                                         description
+                                         subjects
+                                         retention-policy
+                                         allow-direct-access?
+                                         allow-rollup?
+                                         deny-delete?
+                                         deny-purge?
+                                         max-age
+                                         max-bytes
+                                         max-consumers
+                                         max-messages
+                                         max-messages-per-subject
+                                         max-msg-size
+                                         replicas]}]
+  (cond-> (StreamConfiguration/builder)
+    name (.name name)
+    description (.name description)
+    subjects (.subjects (into-array String subjects))
+    retention-policy (.retentionPolicy (retention-policies retention-policy))
+    (boolean? allow-direct-access?) (.allowDirect allow-direct-access?)
+    (boolean? allow-rollup?) (.allowRollup allow-rollup?)
+    (boolean? deny-delete?) (.denyDelete deny-delete?)
+    (boolean? deny-purge?) (.denyPurge deny-purge?)
+    max-age (.maxAge max-age)
+    max-bytes (.maxBytes max-bytes)
+    max-consumers (.maxConsumers max-consumers)
+    max-messages (.maxMessages max-messages)
+    max-messages-per-subject (.maxMessagesPerSubject max-messages-per-subject)
+    max-msg-size (.maxMsgSize max-msg-size)
+    replicas (.replicas replicas)
+    :always (.build)))
+
 (defn ^{:style/indent 1 :export true} create-stream
-  [conn {:keys [name
-                description
-                subjects
-                retention-policy
-                allow-direct-access?
-                allow-rollup?
-                deny-delete?
-                deny-purge?
-                max-age
-                max-bytes
-                max-consumers
-                max-messages
-                max-messages-per-subject
-                max-msg-size
-                replicas]}]
-  (.addStream
-   (.jetStreamManagement conn)
-   (cond-> (StreamConfiguration/builder)
-     name (.name name)
-     description (.name description)
-     subjects (.subjects (into-array String subjects))
-     retention-policy (.retentionPolicy (retention-policies retention-policy))
-     (boolean? allow-direct-access?) (.allowDirect allow-direct-access?)
-     (boolean? allow-rollup?) (.allowRollup allow-rollup?)
-     (boolean? deny-delete?) (.denyDelete deny-delete?)
-     (boolean? deny-purge?) (.denyPurge deny-purge?)
-     max-age (.maxAge max-age)
-     max-bytes (.maxBytes max-bytes)
-     max-consumers (.maxConsumers max-consumers)
-     max-messages (.maxMessages max-messages)
-     max-messages-per-subject (.maxMessagesPerSubject max-messages-per-subject)
-     max-msg-size (.maxMsgSize max-msg-size)
-     replicas (.replicas replicas)
-     :always (.build))))
+  "Adds a stream. See `map->stream-configuration` for valid options in `config`."
+  [conn config]
+  (.addStream (.jetStreamManagement conn) (map->stream-configuration config)))
 
 (defn ^:export get-cluster-info [conn stream-name]
   (-> (.jetStreamManagement conn)
