@@ -470,3 +470,11 @@
 
 (defn ^:export get-consumers [conn stream-name]
   (map consumer-info->map (.getConsumers (.jetStreamManagement conn) stream-name)))
+
+(defn ^:export delete-message [conn stream-name seq-n & [{:keys [erase?] :as opt}]]
+  (if opt
+    (.deleteMessage (.jetStreamManagement conn) stream-name seq-n (boolean erase?))
+    (.deleteMessage (.jetStreamManagement conn) stream-name seq-n)))
+
+(defn ^:export delete-stream [conn stream-name]
+  (.deleteStream (.jetStreamManagement conn) stream-name))
