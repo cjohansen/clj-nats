@@ -263,6 +263,26 @@
       .getAccountStatistics
       account-statistics->map))
 
+(defn ^:export get-first-message [conn stream-name subject]
+  (-> (.jetStreamManagement conn)
+      (.getFirstMessage stream-name subject)
+      nats/message-info->map))
+
+(defn ^:export get-last-message [conn stream-name subject]
+  (-> (.jetStreamManagement conn)
+      (.getLastMessage stream-name subject)
+      nats/message-info->map))
+
+(defn ^:export get-message [conn stream-name seq]
+  (-> (.jetStreamManagement conn)
+      (.getMessage stream-name seq)
+      nats/message-info->map))
+
+(defn ^:export get-next-message [conn stream-name seq subject]
+  (-> (.jetStreamManagement conn)
+      (.getNextMessage stream-name seq subject)
+      nats/message-info->map))
+
 (defn ^{:style/indent 1 :export true} create-stream
   "Adds a stream. See `map->stream-configuration` for valid options in `config`."
   [conn config]
