@@ -1,12 +1,39 @@
 (ns nats.stream
   (:require [nats.cluster :as cluster]
             [nats.core :as nats])
-  (:import (io.nats.client.api AccountLimits AccountStatistics AccountTier
-                               ApiStats CompressionOption ConsumerLimits DiscardPolicy
+  (:import (io.nats.client.api AccountLimits AccountStatistics AccountTier ConsumerConfiguration
+                               ConsumerConfiguration$Builder DeliverPolicy ReplayPolicy
+                               AckPolicy ApiStats CompressionOption ConsumerLimits DiscardPolicy
                                External Placement Republish RetentionPolicy SourceBase
-                               SourceInfoBase StorageType StreamConfiguration
+                               SourceInfoBase StorageType StreamConfiguration ConsumerInfo
                                StreamInfo StreamInfoOptions StreamInfoOptions$Builder
                                StreamState Subject SubjectTransform)))
+
+(def ack-policies
+  {:nats.ack-policy/all AckPolicy/All
+   :nats.ack-policy/explicit AckPolicy/Explicit
+   :nats.ack-policy/none AckPolicy/None})
+
+(def ack-policy->k
+  (into {} (map (juxt second first) ack-policies)))
+
+(def deliver-policies
+  {:nats.deliver-policy/all DeliverPolicy/All
+   :nats.deliver-policy/by-start-sequence DeliverPolicy/ByStartSequence
+   :nats.deliver-policy/by-start-time DeliverPolicy/ByStartTime
+   :nats.deliver-policy/last DeliverPolicy/Last
+   :nats.deliver-policy/last-per-subject DeliverPolicy/LastPerSubject
+   :nats.deliver-policy/new DeliverPolicy/New})
+
+(def deliver-policy->k
+  (into {} (map (juxt second first) deliver-policies)))
+
+(def replay-policies
+  {:nats.replay-policy/limits ReplayPolicy/Instant
+   :nats.replay-policy/work-queue ReplayPolicy/Original})
+
+(def replay-policy->k
+  (into {} (map (juxt second first) replay-policies)))
 
 (def retention-policies
   {:nats.retention-policy/limits RetentionPolicy/Limits
@@ -313,3 +340,119 @@
   (assert (not (nil? (:data message))) "Can't publish nil data")
   (->> (nats/build-message message)
        (.publish (.jetStream conn))))
+
+(defn build-consumer-configuration
+  [{:keys [ack-policy ack-wait backoff deliver-group deliver-policy deliver-subject
+           description durable filter-subject filter-subjects flow-control
+           headers-only? idle-heartbeat inactive-threshold max-ack-pending max-batch
+           max-bytes max-deliver max-expires max-pull-waiting mem-storage? metadata
+           name num-replicas pause-until rate-limit replay-policy sample-frequency
+           start-sequence sequence start-time]}]
+  (cond-> ^ConsumerConfiguration$Builder (ConsumerConfiguration/builder)
+    (ack-policies ack-policy) (.ackPolicy (ack-policies ack-policy))
+    ack-wait (.ackWait ack-wait)
+    backoff (.backoff backoff)
+    deliver-group (.deliverGroup deliver-group)
+    (deliver-policies deliver-policy) (.deliverPolicy (deliver-policies deliver-policy))
+    deliver-subject (.deliverSubject deliver-subject)
+    description (.description description)
+    durable (.durable durable)
+    filter-subject (.filterSubject filter-subject)
+    filter-subjects (.filterSubjects filter-subjects)
+    flow-control (.flowControl flow-control)
+    headers-only? (.headersOnly headers-only?)
+    idle-heartbeat (.idleHeartbeat idle-heartbeat)
+    inactive-threshold (.inactiveThreshold inactive-threshold)
+    max-ack-pending (.maxAckPending max-ack-pending)
+    max-batch (.maxBatch max-batch)
+    max-bytes (.maxBytes max-bytes)
+    max-deliver (.maxDeliver max-deliver)
+    max-expires (.maxExpires max-expires)
+    max-pull-waiting (.maxPullWaiting max-pull-waiting)
+    mem-storage? (.memStorage mem-storage?)
+    metadata (.metadata metadata)
+    name (.name name)
+    num-replicas (.numReplicas num-replicas)
+    pause-until (.pauseUntil pause-until)
+    rate-limit (.rateLimit rate-limit)
+    (replay-policies replay-policy) (.replayPolicy (replay-policies replay-policy))
+    sample-frequency (.sampleFrequency sample-frequency)
+    start-sequence (.startSequence start-sequence)
+    sequence (.startSequence sequence)
+    start-time (.startTime start-time)
+    :then (.build)))
+
+(defn consumer-configuration->map [^ConsumerConfiguration config]
+  {:ack-policy-was-set? (.ackPolicyWasSet config)
+   :backoff-was-set? (.backoffWasSet config)
+   :deliver-policy-was-set? (.deliverPolicyWasSet config)
+   :flow-control-was-set? (.flowControlWasSet config)
+   :ack-policy (ack-policy->k (.getAckPolicy config))
+   :ack-wait (.getAckWait config)
+   :backoff (seq (.getBackoff config))
+   :deliver-group (.getDeliverGroup config)
+   :deliver-policy (deliver-policy->k (.getDeliverPolicy config))
+   :deliver-subject (.getDeliverSubject config)
+   :description (.getDescription config)
+   :durable (.getDurable config)
+   :filter-subject (.getFilterSubject config)
+   :filter-subjects (.getFilterSubjects config)
+   :idle-heartbeat (.getIdleHeartbeat config)
+   :inactve-threshold (.getInactiveThreshold config)
+   :max-ack-pending (.getMaxAckPending config)
+   :max-batch (.getMaxBatch config)
+   :max-bytes (.getMaxBytes config)
+   :max-deliver (.getMaxDeliver config)
+   :max-expires (.getMaxExpires config)
+   :max-pull-waiting (.getMaxPullWaiting config)
+   :metadata (into {} (.getMetadata config))
+   :name (.getName config)
+   :num-replicas (.getNumReplicas config)
+   :pause-until (.getPauseUntil config)
+   :rate-limit (.getRateLimit config)
+   :replay-policy (replay-policy->k (.getReplayPolicy config))
+   :sample-frequency (.getSampleFrequency config)
+   :start-sequence (.getStartSequence config)
+   :start-time (.getStartTime config)
+   :has-multiple-filter-subjects? (.hasMultipleFilterSubjects config)
+   :headers-only-was-set? (.headersOnlyWasSet config)
+   :flow-control? (.isFlowControl config)
+   :headers-only? (.isHeadersOnly config)
+   :mem-storage? (.isMemStorage config)
+   :max-ack-pending-was-set? (.maxAckPendingWasSet config)
+   :max-batch-was-set? (.maxBatchWasSet config)
+   :max-bytes-was-set? (.maxBytesWasSet config)
+   :max-deliver-was-set? (.maxDeliverWasSet config)
+   :max-pull-waiting-was-set? (.maxPullWaitingWasSet config)
+   :mem-storage-was-set? (.memStorageWasSet config)
+   :metadata-was-set? (.metadataWasSet config)
+   :num-replicas-was-set? (.numReplicasWasSet config)
+   :rate-limit-was-set? (.rateLimitWasSet config)
+   :replay-policy-was-set? (.replayPolicyWasSet config)
+   :start-seq-was-set? (.startSeqWasSet config)})
+
+(defn consumer-info->map [^ConsumerInfo info]
+  {:ack-floor (some-> (.getAckFloor info) .getLastActive)
+   :calculated-pending (.getCalculatedPending info)
+   :cluster-info (cluster/cluster-info->map (.getClusterInfo info))
+   :consumer-configuration (consumer-configuration->map (.getConsumerConfiguration info))
+   :creation-time (.getCreationTime info)
+   :delivered (some-> (.getDelivered info) .getLastActive)
+   :name (.getName info)
+   :ack-pending (.getNumAckPending info)
+   :num-pending (.getNumPending info)
+   :num-waiting (.getNumWaiting info)
+   :paused (.getPaused info)
+   :pause-remaining (.getPauseRemaining info)
+   :redelivered (.getRedelivered info)
+   :stream-name (.getStreamName info)
+   :timestamp (.getTimestamp info)
+   :push-bound? (.isPushBound info)})
+
+(defn ^{:style/indent 1 :export true} add-consumer [conn stream-name configuration]
+  (->> (build-consumer-configuration configuration)
+       (.addOrUpdateConsumer (.jetStreamManagement conn) stream-name)
+       consumer-info->map))
+
+(defn ^{:style/indent 1 :export true} update-consumer [conn stream-name configuration]
+  (add-consumer conn stream-name configuration))
