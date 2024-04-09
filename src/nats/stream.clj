@@ -1,6 +1,6 @@
 (ns nats.stream
   (:require [nats.cluster :as cluster]
-            [nats.message :as message])
+            [nats.core :as nats])
   (:import (io.nats.client.api AccountLimits AccountStatistics AccountTier
                                ApiStats CompressionOption ConsumerLimits DiscardPolicy
                                External Placement Republish RetentionPolicy SourceBase
@@ -291,5 +291,5 @@
   [conn message]
   (assert (not (nil? (:subject message))) "Can't publish without data")
   (assert (not (nil? (:data message))) "Can't publish nil data")
-  (->> (message/build-message message)
+  (->> (nats/build-message message)
        (.publish (.jetStream conn))))
