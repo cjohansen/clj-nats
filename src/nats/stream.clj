@@ -1,8 +1,9 @@
 (ns nats.stream
   (:require [nats.cluster :as cluster]
             [nats.message :as message])
-  (:import (io.nats.client.api CompressionOption ConsumerLimits DiscardPolicy External
-                               Placement Republish RetentionPolicy SourceBase
+  (:import (io.nats.client.api AccountLimits AccountStatistics AccountTier
+                               ApiStats CompressionOption ConsumerLimits DiscardPolicy
+                               External Placement Republish RetentionPolicy SourceBase
                                SourceInfoBase StorageType StreamConfiguration
                                StreamInfo StreamInfoOptions StreamInfoOptions$Builder
                                StreamState Subject SubjectTransform)))
@@ -226,6 +227,41 @@
          (.getStreams (.jetStreamManagement conn) subject-filter)
          (.getStreams (.jetStreamManagement conn)))
        (map stream-info->map)))
+
+(defn api-stats->map [^ApiStats api]
+  {:errors (.getErrors api)
+   :total (.getTotal api)})
+
+(defn account-limits->map [^AccountLimits limits]
+  {:max-ack-pending (.getMaxAckPending limits)
+   :max-consumers (.getMaxConsumers limits)
+   :max-memory (.getMaxMemory limits)
+   :max-storage (.getMaxStorage limits)
+   :max-streams (.getMaxStreams limits)
+   :memory-max-stream-bytes (.getMemoryMaxStreamBytes limits)
+   :storage-max-stream-bytes (.getStorageMaxStreamBytes limits)
+   :max-bytes-required? (.isMaxBytesRequired limits)})
+
+(defn account-tier->map [^AccountTier tier]
+  {:limits (account-limits->map (.getLimits tier))
+   :consumers (.getConsumers tier)
+   :memory (.getMemory tier)
+   :storage (.getStorage tier)
+   :streams (.getStreams tier)})
+
+(defn account-statistics->map [^AccountStatistics stats]
+  {:api-stats (api-stats->map (.getApi stats))
+   :consumers (.getConsumers stats)
+   :limits (account-limits->map (.getLimits stats))
+   :memory (.getMemory stats)
+   :storage (.getStorage stats)
+   :streams (.getStreams stats)
+   :tiers (update-vals (.getTiers stats) account-tier->map)})
+
+(defn ^:export get-account-statistics [conn]
+  (-> (.jetStreamManagement conn)
+      .getAccountStatistics
+      account-statistics->map))
 
 (defn ^{:style/indent 1 :export true} create-stream
   "Adds a stream. See `map->stream-configuration` for valid options in `config`."

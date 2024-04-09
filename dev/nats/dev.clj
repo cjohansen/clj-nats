@@ -22,5 +22,6 @@
 
   (stream/get-stream-names conn)
   (stream/get-streams conn)
+  (stream/get-account-statistics conn)
 
   )
