@@ -34,5 +34,7 @@
   (stream/add-consumer conn "test-stream" {:name "worker"})
   (stream/get-consumer-info conn "test-stream" "worker")
   (stream/delete-consumer conn "test-stream" "worker")
+  (stream/get-consumer-names conn "test-stream")
+  (stream/get-consumers conn "test-stream")
 
   )

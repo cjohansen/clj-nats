@@ -464,3 +464,9 @@
   (-> (.jetStreamManagement conn)
       (.getConsumerInfo stream-name consumer-name)
       consumer-info->map))
+
+(defn ^{:style/indent 1 :export true} get-consumer-names [conn stream-name]
+  (.getConsumerNames (.jetStreamManagement conn) stream-name))
+
+(defn ^{:style/indent 1 :export true} get-consumers [conn stream-name]
+  (map consumer-info->map (.getConsumers (.jetStreamManagement conn) stream-name)))
