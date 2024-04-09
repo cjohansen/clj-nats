@@ -32,5 +32,7 @@
   (stream/get-message conn "test-stream" 3)
   (stream/get-next-message conn "test-stream" 2 "test.work.email.ed281046-938e-4096-8901-8bd6be6869ed")
   (stream/add-consumer conn "test-stream" {:name "worker"})
+  (stream/get-consumer-info conn "test-stream" "worker")
+  (stream/delete-consumer conn "test-stream" "worker")
 
   )
