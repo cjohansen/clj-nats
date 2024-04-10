@@ -3,11 +3,13 @@
             [nats.core :as nats])
   (:import (io.nats.client PurgeOptions PurgeOptions$Builder)
            (io.nats.client.api AccountLimits AccountStatistics AccountTier ConsumerConfiguration
-                               ConsumerConfiguration$Builder DeliverPolicy ReplayPolicy
-                               AckPolicy ApiStats CompressionOption ConsumerLimits DiscardPolicy
-                               External Placement Republish RetentionPolicy SourceBase SourceInfoBase
-                               StorageType StreamConfiguration ConsumerInfo StreamInfo StreamInfoOptions
-                               StreamInfoOptions$Builder StreamState Subject SubjectTransform)))
+                               ConsumerConfiguration$Builder ConsumerPauseResponse DeliverPolicy
+                               ReplayPolicy AckPolicy ApiStats CompressionOption ConsumerLimits
+                               DiscardPolicy External Placement Republish RetentionPolicy SourceBase
+                               SourceInfoBase StorageType StreamConfiguration ConsumerInfo StreamInfo
+                               StreamInfoOptions StreamInfoOptions$Builder StreamState Subject
+                               SubjectTransform)
+           (java.time ZonedDateTime)))
 
 (def ack-policies
   {:nats.ack-policy/all AckPolicy/All
@@ -480,7 +482,7 @@
   (.deleteStream (.jetStreamManagement conn) stream-name))
 
 (defn build-purge-options [{:keys [keep sequence subject]}]
-  (cond-> (PurgeOptions/builder)
+  (cond-> ^PurgeOptions$Builder (PurgeOptions/builder)
     keep (.keep keep)
     sequence (.sequence sequence)
     subject (.subject (name subject))))
@@ -488,3 +490,13 @@
 (defn ^:export purge-stream [conn stream-name & [opts]]
   (-> (.jetStreamManagement conn)
       (.purgeStream stream-name (build-purge-options opts))))
+
+(defn ^:export pause-consumer [conn stream-name consumer-name ^ZonedDateTime pause-until]
+  (-> (.jetStreamManagement conn)
+      (.pauseConsumer stream-name consumer-name pause-until))
+  true)
+
+(defn ^:export resume-consumer [conn stream-name consumer-name]
+  (-> (.jetStreamManagement conn)
+      (.resumeConsumer stream-name consumer-name)
+      stream-info->map))
