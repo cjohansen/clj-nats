@@ -3,13 +3,21 @@
             [nats.core :as nats])
   (:import (io.nats.client PurgeOptions PurgeOptions$Builder)
            (io.nats.client.api AccountLimits AccountStatistics AccountTier ConsumerConfiguration
-                               ConsumerConfiguration$Builder ConsumerPauseResponse DeliverPolicy
+                               ConsumerConfiguration$Builder DeliverPolicy
                                ReplayPolicy AckPolicy ApiStats CompressionOption ConsumerLimits
                                DiscardPolicy External Placement Republish RetentionPolicy SourceBase
                                SourceInfoBase StorageType StreamConfiguration ConsumerInfo StreamInfo
                                StreamInfoOptions StreamInfoOptions$Builder StreamState Subject
                                SubjectTransform)
-           (java.time ZonedDateTime)))
+           (java.time Instant ZoneId)))
+
+(def default-tz
+  "The Java SDK uses ZonedDateTime for every instant and defaults the time zone to
+   GMT. All the NATS times are instants in time, so Instant is the appropriate
+   representation for them - no need to wrap them all in a timezone. This default
+   timezone is here only to convert incoming Instants to the ZonedDateTime the Java
+   SDK expects."
+  (ZoneId/of "GMT"))
 
 (def ack-policies
   {:nats.ack-policy/all AckPolicy/All
@@ -127,7 +135,7 @@
              :name (.getName mirror)
              :source-name (.getSourceName mirror)
              :start-seq (.getStartSeq mirror)
-             :start-time (.getStartTime mirror)
+             :start-time (some-> (.getStartTime mirror) .toInstant)
              :subject-transforms (set (map subject-transform->map (.getSubjectTransforms mirror)))}
       external (assoc :external external))))
 
@@ -216,8 +224,8 @@
    :deleted (into [] (.getDeleted state))
    :deleted-count (.getDeletedCount state)
    :first-sequence-number (.getFirstSequence state)
-   :first-time (.getFirstTime state)
-   :last-time (.getLastTime state)
+   :first-time (some-> (.getFirstTime state) .toInstant)
+   :last-time (some-> (.getLastTime state) .toInstant)
    :message-count (.getMsgCount state)
    :subject-count (.getSubjectCount state)
    :subjects (set (for [^Subject subject (.getSubjects state)]
@@ -234,9 +242,9 @@
         cluster-info (.getClusterInfo info)
         mirror-info (.getMirrorInfo info)
         stream-state (.getStreamState info)]
-    (cond-> {:create-time (.getCreateTime info)
+    (cond-> {:create-time (some-> (.getCreateTime info) .toInstant)
              :configuration (configuration->map (.getConfiguration info))
-             :timestamp (.getTimestamp info)}
+             :timestamp (some-> (.getTimestamp info) .toInstant)}
       (seq source-infos) (assoc :source-infos source-infos)
       cluster-info (assoc :cluster-info (cluster/cluster-info->map cluster-info))
       mirror-info (assoc :mirror-info (source-info->map mirror-info))
@@ -360,7 +368,7 @@
     description (.description description)
     durable (.durable durable)
     filter-subject (.filterSubject (name filter-subject))
-    filter-subjects (set (.filterSubjects (map name filter-subjects)))
+    filter-subjects (.filterSubjects (map name filter-subjects))
     flow-control (.flowControl flow-control)
     headers-only? (.headersOnly headers-only?)
     idle-heartbeat (.idleHeartbeat idle-heartbeat)
@@ -381,7 +389,7 @@
     sample-frequency (.sampleFrequency sample-frequency)
     start-sequence (.startSequence start-sequence)
     sequence (.startSequence sequence)
-    start-time (.startTime start-time)
+    start-time (.startTime (.atZone start-time default-tz))
     :then (.build)))
 
 (defn consumer-configuration->map [^ConsumerConfiguration config]
@@ -415,7 +423,7 @@
    :replay-policy (replay-policy->k (.getReplayPolicy config))
    :sample-frequency (.getSampleFrequency config)
    :start-sequence (.getStartSequence config)
-   :start-time (.getStartTime config)
+   :start-time (some-> (.getStartTime config) .toInstant)
    :has-multiple-filter-subjects? (.hasMultipleFilterSubjects config)
    :headers-only-was-set? (.headersOnlyWasSet config)
    :flow-control? (.isFlowControl config)
@@ -438,7 +446,7 @@
    :calculated-pending (.getCalculatedPending info)
    :cluster-info (cluster/cluster-info->map (.getClusterInfo info))
    :consumer-configuration (consumer-configuration->map (.getConsumerConfiguration info))
-   :creation-time (.getCreationTime info)
+   :creation-time (some-> (.getCreationTime info) .toInstant)
    :delivered (some-> (.getDelivered info) .getLastActive)
    :name (.getName info)
    :ack-pending (.getNumAckPending info)
@@ -448,7 +456,7 @@
    :pause-remaining (.getPauseRemaining info)
    :redelivered (.getRedelivered info)
    :stream-name (.getStreamName info)
-   :timestamp (.getTimestamp info)
+   :timestamp (some-> (.getTimestamp info) .toInstant)
    :push-bound? (.isPushBound info)})
 
 (defn ^{:style/indent 1 :export true} add-consumer [conn stream-name configuration]
@@ -491,9 +499,9 @@
   (-> (.jetStreamManagement conn)
       (.purgeStream stream-name (build-purge-options opts))))
 
-(defn ^:export pause-consumer [conn stream-name consumer-name ^ZonedDateTime pause-until]
+(defn ^:export pause-consumer [conn stream-name consumer-name ^Instant pause-until]
   (-> (.jetStreamManagement conn)
-      (.pauseConsumer stream-name consumer-name pause-until))
+      (.pauseConsumer stream-name consumer-name (.atZone pause-until default-tz)))
   true)
 
 (defn ^:export resume-consumer [conn stream-name consumer-name]
