@@ -1,7 +1,7 @@
 (ns nats.stream
   (:require [nats.cluster :as cluster]
             [nats.core :as nats])
-  (:import (io.nats.client PurgeOptions PurgeOptions$Builder)
+  (:import (io.nats.client PurgeOptions PurgeOptions$Builder PublishOptions PublishOptions$Builder)
            (io.nats.client.api AccountLimits AccountStatistics AccountTier ConsumerConfiguration
                                ConsumerConfiguration$Builder DeliverPolicy
                                ReplayPolicy AckPolicy ApiStats CompressionOption ConsumerLimits
@@ -334,6 +334,23 @@
       (.updateStream (map->stream-configuration config))
       stream-info->map))
 
+(defn build-publish-options [{:keys [expected-last-msg-id
+                                     expected-last-sequence
+                                     expected-last-subject-sequence
+                                     expected-stream
+                                     message-id
+                                     stream
+                                     stream-timeout]}]
+  (cond-> ^PublishOptions$Builder (PublishOptions/builder)
+    expected-last-msg-id (.expectedLastMsgId expected-last-msg-id)
+    expected-last-sequence (.expectedLastSequence expected-last-sequence)
+    expected-last-subject-sequence (.expectedLastSubjectSequence expected-last-subject-sequence)
+    expected-stream (.expectedStream (name expected-stream))
+    message-id (.messageId message-id)
+    stream (.stream (name stream))
+    stream-timeout (.streamTimeout stream-timeout)
+    :then (.build)))
+
 (defn ^{:style/indent 1 :export true} publish
   "Publish a message to a JetStream subject. Performs publish acking if the stream
    requires it. Use `nats.core/publish` for regular PubSub messaging.
@@ -344,13 +361,26 @@
   - `:data` - The message data. Can be any Clojure value
   - `:headers` - An optional map of string keys to string (or collection of
                  string) values to set as meta-data on the message.
-  - `:reply-to` - An optional reply-to subject."
-  [conn message]
+  - `:reply-to` - An optional reply-to subject.
+
+  See `build-publish-options` for details on `opts`."
+  [conn message & [opts]]
   (assert (not (nil? (:subject message))) "Can't publish without data")
   (assert (not (nil? (:data message))) "Can't publish nil data")
   (->> (nats/build-message message)
-       (.publish (.jetStream conn))
+       (.publish (.jetStream conn) (build-publish-options opts))
        nats/publish-ack->map))
+
+(defn ^{:style/indent 1 :export true} publish-async
+  "Like `publish`, but does not block. Returns a future."
+  [conn message & [opts]]
+  (assert (not (nil? (:subject message))) "Can't publish without data")
+  (assert (not (nil? (:data message))) "Can't publish nil data")
+  (future
+    (->> (nats/build-message message)
+         (.publishAsync (.jetStream conn) (build-publish-options opts))
+         deref
+         nats/publish-ack->map)))
 
 (defn build-consumer-configuration
   [{:keys [ack-policy ack-wait backoff deliver-group deliver-policy deliver-subject
