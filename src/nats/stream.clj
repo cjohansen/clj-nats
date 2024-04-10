@@ -1,13 +1,13 @@
 (ns nats.stream
   (:require [nats.cluster :as cluster]
             [nats.core :as nats])
-  (:import (io.nats.client.api AccountLimits AccountStatistics AccountTier ConsumerConfiguration
+  (:import (io.nats.client PurgeOptions PurgeOptions$Builder)
+           (io.nats.client.api AccountLimits AccountStatistics AccountTier ConsumerConfiguration
                                ConsumerConfiguration$Builder DeliverPolicy ReplayPolicy
                                AckPolicy ApiStats CompressionOption ConsumerLimits DiscardPolicy
-                               External Placement Republish RetentionPolicy SourceBase
-                               SourceInfoBase StorageType StreamConfiguration ConsumerInfo
-                               StreamInfo StreamInfoOptions StreamInfoOptions$Builder
-                               StreamState Subject SubjectTransform)))
+                               External Placement Republish RetentionPolicy SourceBase SourceInfoBase
+                               StorageType StreamConfiguration ConsumerInfo StreamInfo StreamInfoOptions
+                               StreamInfoOptions$Builder StreamState Subject SubjectTransform)))
 
 (def ack-policies
   {:nats.ack-policy/all AckPolicy/All
@@ -478,3 +478,13 @@
 
 (defn ^:export delete-stream [conn stream-name]
   (.deleteStream (.jetStreamManagement conn) stream-name))
+
+(defn build-purge-options [{:keys [keep sequence subject]}]
+  (cond-> (PurgeOptions/builder)
+    keep (.keep keep)
+    sequence (.sequence sequence)
+    subject (.subject (name subject))))
+
+(defn ^:export purge-stream [conn stream-name & [opts]]
+  (-> (.jetStreamManagement conn)
+      (.purgeStream stream-name (build-purge-options opts))))
