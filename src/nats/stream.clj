@@ -349,7 +349,8 @@
   (assert (not (nil? (:subject message))) "Can't publish without data")
   (assert (not (nil? (:data message))) "Can't publish nil data")
   (->> (nats/build-message message)
-       (.publish (.jetStream conn))))
+       (.publish (.jetStream conn))
+       nats/publish-ack->map))
 
 (defn build-consumer-configuration
   [{:keys [ack-policy ack-wait backoff deliver-group deliver-policy deliver-subject

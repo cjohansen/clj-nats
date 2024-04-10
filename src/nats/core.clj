@@ -1,6 +1,6 @@
 (ns nats.core
   (:import (io.nats.client Nats)
-           (io.nats.client.api MessageInfo)
+           (io.nats.client.api MessageInfo PublishAck)
            (io.nats.client.impl Headers NatsMessage NatsMessage$Builder)))
 
 (defn map->Headers [headers]
@@ -59,6 +59,12 @@
      :subject (.getSubject message)
      :time (.getTime message)}))
 
+(defn publish-ack->map [^PublishAck ack]
+  {:domain (.getDomain ack)
+   :seq-no (.getSeqno ack)
+   :stream (.getStream ack)
+   :duplicate? (.isDuplicate ack)})
+
 (defn ^:export connect [uri]
   (Nats/connect uri))
 
@@ -80,4 +86,5 @@
   (assert (not (nil? (:subject message))) "Can't publish without data")
   (assert (not (nil? (:data message))) "Can't publish nil data")
   (->> (build-message message)
-       (.publish conn)))
+       (.publish conn)
+       publish-ack->map))
