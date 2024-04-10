@@ -36,7 +36,7 @@
                   (= :string kind) (assoc "content-type" ["text/plain"])
                   (= :edn kind) (assoc "content-type" ["application/edn"]))]
     (cond-> ^NatsMessage$Builder (NatsMessage/builder)
-      subject (.subject subject)
+      subject (.subject (name subject))
       reply-to (.replyTo reply-to)
       headers (.headers (map->Headers headers))
       data (.data (cond-> data

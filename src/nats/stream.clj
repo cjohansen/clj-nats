@@ -82,7 +82,7 @@
   (cond-> (StreamConfiguration/builder)
     name (.name name)
     description (.name description)
-    subjects (.subjects (into-array String subjects))
+    subjects (.subjects (into-array String (map name subjects)))
     retention-policy (.retentionPolicy (retention-policies retention-policy))
     (boolean? allow-direct-access?) (.allowDirect allow-direct-access?)
     (boolean? allow-rollup?) (.allowRollup allow-rollup?)
@@ -103,7 +103,7 @@
       (.getStreamInfo stream-name
                       (cond-> ^StreamInfoOptions$Builder (StreamInfoOptions/builder)
                         include-deleted-details? (.deletedDetails)
-                        (seq filter-subjects) (.filterSubjects filter-subjects)
+                        (seq filter-subjects) (.filterSubjects (map name filter-subjects))
                         :always (.build)))))
 
 (defn ^:export get-cluster-info [conn stream-name & [options]]
@@ -126,7 +126,7 @@
              :source-name (.getSourceName mirror)
              :start-seq (.getStartSeq mirror)
              :start-time (.getStartTime mirror)
-             :subject-transforms (map subject-transform->map (.getSubjectTransforms mirror))}
+             :subject-transforms (set (map subject-transform->map (.getSubjectTransforms mirror)))}
       external (assoc :external external))))
 
 (defn consumer-limits->map [^ConsumerLimits consumer-limits]
@@ -150,8 +150,8 @@
         mirror (some-> (.getMirror config) source-base->map)
         placement (some-> (.getPlacement config) placement->map)
         republish (some-> (.getRepublish config) republish->map)
-        sources (for [source (.getSources config)]
-                  (source-base->map source))
+        sources (set (for [source (.getSources config)]
+                       (source-base->map source)))
         subject-transform (some-> (.getSubjectTransform config) subject-transform->map)
         template-owner (.getTemplateOwner config)]
     (cond-> {:allow-direct? (.getAllowDirect config)
@@ -177,7 +177,7 @@
              :retention-policy (retention-policy->k (.getRetentionPolicy config))
              :sealed? (.getSealed config)
              :storage-type (storage-type->k (.getStorageType config))
-             :subjects (seq (.getSubjects config))
+             :subjects (set (.getSubjects config))
              :discard-new-per-subject? (.isDiscardNewPerSubject config)}
       description (assoc :description description)
       mirror (assoc :mirror mirror)
@@ -218,9 +218,9 @@
    :last-time (.getLastTime state)
    :message-count (.getMsgCount state)
    :subject-count (.getSubjectCount state)
-   :subjects (for [^Subject subject (.getSubjects state)]
-               {:count (.getCount subject)
-                :name (.getName subject)})})
+   :subjects (set (for [^Subject subject (.getSubjects state)]
+                    {:count (.getCount subject)
+                     :name (.getName subject)}))})
 
 (defn ^:export get-stream-state [conn stream-name & [options]]
   (-> (get-stream-info-object conn stream-name options)
@@ -292,12 +292,12 @@
 
 (defn ^:export get-first-message [conn stream-name subject]
   (-> (.jetStreamManagement conn)
-      (.getFirstMessage stream-name subject)
+      (.getFirstMessage stream-name (name subject))
       nats/message-info->map))
 
 (defn ^:export get-last-message [conn stream-name subject]
   (-> (.jetStreamManagement conn)
-      (.getLastMessage stream-name subject)
+      (.getLastMessage stream-name (name subject))
       nats/message-info->map))
 
 (defn ^:export get-message [conn stream-name seq]
@@ -307,7 +307,7 @@
 
 (defn ^:export get-next-message [conn stream-name seq subject]
   (-> (.jetStreamManagement conn)
-      (.getNextMessage stream-name seq subject)
+      (.getNextMessage stream-name seq (name subject))
       nats/message-info->map))
 
 (defn ^{:style/indent 1 :export true} create-stream
@@ -354,11 +354,11 @@
     backoff (.backoff backoff)
     deliver-group (.deliverGroup deliver-group)
     (deliver-policies deliver-policy) (.deliverPolicy (deliver-policies deliver-policy))
-    deliver-subject (.deliverSubject deliver-subject)
+    deliver-subject (.deliverSubject (name deliver-subject))
     description (.description description)
     durable (.durable durable)
-    filter-subject (.filterSubject filter-subject)
-    filter-subjects (.filterSubjects filter-subjects)
+    filter-subject (.filterSubject (name filter-subject))
+    filter-subjects (set (.filterSubjects (map name filter-subjects)))
     flow-control (.flowControl flow-control)
     headers-only? (.headersOnly headers-only?)
     idle-heartbeat (.idleHeartbeat idle-heartbeat)
