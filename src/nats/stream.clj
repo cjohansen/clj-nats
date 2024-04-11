@@ -563,6 +563,10 @@
 (defn pull-message [^IterableConsumer subscription timeout]
   (some-> (.nextMessage subscription timeout) nats/message->map))
 
+(defn unsubscribe [^IterableConsumer subscription]
+  (.close subscription)
+  nil)
+
 (defn ^:export ack [conn message]
   (nats/publish conn {:subject (:reply-to message)
                       :data (.bodyBytes AckType/AckAck -1)}))

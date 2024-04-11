@@ -1,5 +1,5 @@
 (ns nats.core
-  (:import (io.nats.client Message Nats)
+  (:import (io.nats.client Message Nats Subscription)
            (io.nats.client.api MessageInfo PublishAck)
            (io.nats.client.impl AckType Headers NatsJetStreamMetaData
                                 NatsMessage NatsMessage$Builder)
@@ -97,7 +97,8 @@
 (defn message->map [^Message message]
   (let [headers (headers->map (.getHeaders message))
         status (status->map (.getStatus message))
-        last-ack (.lastAck message)]
+        last-ack (.lastAck message)
+        jet-stream? (.isJetStream message)]
     (cond-> {:consume-byte-count (.consumeByteCount message)
              :data (get-message-data headers (.getData message))
              :headers headers
@@ -105,11 +106,11 @@
              :SID (.getSID message)
              :subject (.getSubject message)
              :has-headers? (.hasHeaders message)
-             :jet-stream? (.isJetStream message)
-             :status-message? (.isStatusMessage message)
-             :metadata (jet-stream-metadata->map (.metaData message))}
+             :jet-stream? jet-stream?
+             :status-message? (.isStatusMessage message)}
       status (assoc :status status)
-      last-ack (assoc :last-ack (ack-type->k last-ack)))))
+      last-ack (assoc :last-ack (ack-type->k last-ack))
+      jet-stream? (assoc :metadata (jet-stream-metadata->map (.metaData message))))))
 
 (defn publish-ack->map [^PublishAck ack]
   (when ack
@@ -141,3 +142,18 @@
   (->> (build-message message)
        (.publish conn)
        publish-ack->map))
+
+(defn ^{:style/indent 1 :export true} subscribe
+  "Subscribe to non-stream subject. For JetStream subjects, instead use
+  `nats.stream/subscribe`. Pull messages with `nats.core/pull-message`."
+  [conn subject & [queue-name]]
+  (if queue-name
+    (.subscribe conn (name subject))
+    (.subscribe conn (name subject) queue-name)))
+
+(defn ^:export pull-message [^Subscription subscription timeout]
+  (some-> (.nextMessage subscription timeout) message->map))
+
+(defn ^:export unsubscribe [^Subscription subscription]
+  (.unsubscribe subscription)
+  nil)
