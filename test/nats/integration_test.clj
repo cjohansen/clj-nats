@@ -1,7 +1,8 @@
 (ns nats.integration-test
   (:require [clojure.core.async :as a]
             [clojure.test :refer [deftest is testing]]
-            [nats.core :as nats]))
+            [nats.core :as nats]
+            [nats.message :as message]))
 
 (defn run-pubsub-example []
   (let [conn (nats/connect "nats://localhost:4222")
@@ -17,12 +18,12 @@
           (nats/unsubscribe subscription))))
 
     (nats/publish conn
-      {:subject "chat.general.christian"
-       :data {:message "Hello world!"}})
+      {::nats/subject "chat.general.christian"
+       ::message/data {:message "Hello world!"}})
 
     (nats/publish conn
-      {:subject "chat.general.rubber-duck"
-       :data {:message "Hi there, fella"}})
+      {::nats/subject "chat.general.rubber-duck"
+       ::message/data {:message "Hi there, fella"}})
 
     (Thread/sleep 250)
     (reset! running? false)
@@ -33,20 +34,20 @@
   (testing "Receives messages"
     (is (= (->> (run-pubsub-example)
                 :messages
-                (map #(dissoc % :SID)))
-           [{:jet-stream? false
-             :status-message? false
-             :headers {"content-type" ["application/edn"]}
-             :consume-byte-count 89
-             :reply-to nil
-             :subject "chat.general.christian"
-             :has-headers? true
-             :data {:message "Hello world!"}}
-            {:jet-stream? false
-             :status-message? false
-             :headers {"content-type" ["application/edn"]}
-             :consume-byte-count 94
-             :reply-to nil
-             :subject "chat.general.rubber-duck"
-             :has-headers? true
-             :data {:message "Hi there, fella"}}]))))
+                (map #(dissoc % ::message/SID)))
+           [{::message/jet-stream? false
+             ::message/status-message? false
+             ::message/headers {"content-type" ["application/edn"]}
+             ::message/consume-byte-count 89
+             ::message/reply-to nil
+             ::message/subject "chat.general.christian"
+             ::message/has-headers? true
+             ::message/data {:message "Hello world!"}}
+            {::message/jet-stream? false
+             ::message/status-message? false
+             ::message/headers {"content-type" ["application/edn"]}
+             ::message/consume-byte-count 94
+             ::message/reply-to nil
+             ::message/subject "chat.general.rubber-duck"
+             ::message/has-headers? true
+             ::message/data {:message "Hi there, fella"}}]))))

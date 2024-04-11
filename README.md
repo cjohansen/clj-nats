@@ -68,15 +68,29 @@ Create a connection:
 Publish a message (see below for publishing to streams):
 
 ```clj
-(require '[nats.core :as nats])
+(require '[nats.core :as nats]
+         '[nats.message :as message])
 
 (def conn (nats/connect "nats://localhost:4222"))
 
 (nats/publish conn
-  {:subject "chat.general.christian"
-   :data {:message "Hello world!"}
-   :headers {:user "Christian"}       ;; Optional
-   :reply-to "chat.general.replies"}) ;; Optional
+  {::message/subject "chat.general.christian"
+   ::message/data {:message "Hello world!"}
+   ::message/headers {:user "Christian"}       ;; Optional
+   ::message/reply-to "chat.general.replies"}) ;; Optional
+```
+
+Subscribing to messages (see below for consuming streams):
+
+```clj
+(require '[nats.core :as nats])
+
+(def conn (nats/connect "nats://localhost:4222"))
+(def subscription (nats/subscribe conn "chat.>"))
+
+(def msg1 (nats/pull-message subscription 500)) ;; Wait up to 500ms
+(def msg2 (nats/pull-message subscription 500)) ;; Wait up to 500ms
+(nats/unsubscribe subscription)
 ```
 
 Create a stream:
@@ -88,39 +102,41 @@ Create a stream:
 (def conn (nats/connect "nats://localhost:4222"))
 
 (stream/create-stream conn
-  {:name "test-stream"
-   :subjects ["test.work.>"]
-   :allow-direct-access? true
-   :retention-policy :nats.retention-policy/work-queue})
+  {::stream/name "test-stream"
+   ::stream/subjects ["test.work.>"]
+   ::stream/allow-direct-access? true
+   ::stream/retention-policy :nats.retention-policy/work-queue})
 ```
 
 Publish to a stream subject:
 
 ```clj
 (require '[nats.core :as nats]
+         '[nats.message :as message]
          '[nats.stream :as stream])
 
 (def conn (nats/connect "nats://localhost:4222"))
 
 (stream/publish conn
-  {:subject "test.work.email.ed281046-938e-4096-8901-8bd6be6869ed"
-   :data {:email/to "christian@cjohansen.no"
-          :email/subject "Hello, world!"}})
+  {::message/subject "test.work.email.ed281046-938e-4096-8901-8bd6be6869ed"
+   ::message/data {:email/to "christian@cjohansen.no"
+                   :email/subject "Hello, world!"}})
 ```
 
 Create a consumer:
 
 ```clj
 (require '[nats.core :as nats]
+         '[nats.consumer :as consumer]
          '[nats.stream :as stream])
 
 (def conn (nats/connect "nats://localhost:4222"))
 
-(stream/create-consumer conn
-  {:stream-name "test-stream"
-   :consumer-name "test-consumer"
-   :durable? true
-   :filter-subject "test.work.>"})
+(consumer/create-consumer conn
+  {::consumer/stream-name "test-stream"
+   ::consumer/name "test-consumer"
+   ::consumer/durable? true
+   ::consumer/filter-subject "test.work.>"})
 
 ;; Review its configuration
 (stream/get-consumer-info conn "test-stream" "test-consumer")
@@ -130,13 +146,14 @@ Consume messages:
 
 ```clj
 (require '[nats.core :as nats]
+         '[nats.consumer :as consumer]
          '[nats.stream :as stream])
 
 (def conn (nats/connect "nats://localhost:4222"))
 
-(with-open [subscription (stream/subscribe conn "test-stream" "test-consumer")]
-  (let [message (stream/pull-message subscription 1000)] ;; Wait for up to 1000ms
-    (stream/ack conn message)
+(with-open [subscription (consumer/subscribe conn "test-stream" "test-consumer")]
+  (let [message (consumer/pull-message subscription 1000)] ;; Wait for up to 1000ms
+    (consumer/ack conn message)
     (prn message)))
 ```
 
