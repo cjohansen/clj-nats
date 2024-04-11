@@ -495,13 +495,13 @@
    :timestamp (some-> (.getTimestamp info) .toInstant)
    :push-bound? (.isPushBound info)})
 
-(defn ^{:style/indent 1 :export true} add-consumer [conn stream-name configuration]
+(defn ^{:style/indent 1 :export true} create-consumer [conn stream-name configuration]
   (->> (build-consumer-configuration configuration)
        (.addOrUpdateConsumer (.jetStreamManagement conn) stream-name)
        consumer-info->map))
 
 (defn ^{:style/indent 1 :export true} update-consumer [conn stream-name configuration]
-  (add-consumer conn stream-name configuration))
+  (create-consumer conn stream-name configuration))
 
 (defn ^:export delete-consumer [conn stream-name consumer-name]
   (.deleteConsumer (.jetStreamManagement conn) stream-name consumer-name))
