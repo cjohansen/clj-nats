@@ -3,12 +3,20 @@
 clj-nats is an idiomatic Clojure wrapper for the official
 [NATS](https://nats.io) Java SDK [jnats](https://javadoc.io/doc/io.nats/jnats/).
 
+Install:
+
 ```clj
-no.cjohansen/clj-nats {:git/repo "https://github.com/cjohansen/clj-nats"
+no.cjohansen/clj-nats {:git/url "https://github.com/cjohansen/clj-nats"
                        :sha "LATEST_SHA"}
 ```
 
 The current jnats version is `2.17.4`.
+
+## Status
+
+The API is still under development and is subject to change. Once set, it will
+remain backwards compatible. An official release is expected in April 2024.
+Until then, use at risk of breaking changes.
 
 ## Rationale
 
