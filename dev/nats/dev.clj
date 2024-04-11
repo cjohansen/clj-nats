@@ -72,35 +72,4 @@
   (with-open [subscription (stream/subscribe conn "other-stream" "test-consumer")]
     (prn (stream/pull-message subscription 1000)))
 
-  (def fetcher (stream/fetch conn "other-stream" "test-consumer" {:max-messages 10}))
-
-  (def message (stream/fetch-next fetcher))
-  (stream/ack conn message)
-
-
-
-
-  (def subscription (stream/fetch conn "other-stream" "test-consumer" {:max-messages 10}))
-
-  (def message (stream/fetch-next consumer))
-  (stream/ack conn message)
-
-  (when-let [msg (stream/fetch-next consumer)]
-    [msg (stream/ack conn msg)])
-
-  (def res (future (stream/fetch subscription 5 10000)))
-
-  (def message @res)
-
-  (generate-messages conn "test.events.lol." 10)
-
-  (stream/publish conn
-    {:subject "test.events.user-entered.12775c9e-f193-4b24-9297-e8f64536cdd8"
-     :data {:user/email "christian@cjohansen.no"}})
-
-  (stream/publish conn
-    {:subject "test.events.user-entered.12775c9e-f193-4b24-9297-e8f64536cdd8"
-     :data {:user/email "christian.johansen@mattilsynet.no"}})
-
-
   )
