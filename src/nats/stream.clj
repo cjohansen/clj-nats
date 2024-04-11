@@ -73,14 +73,14 @@
   [conn stream-name & [{:keys [include-deleted-details?
                                filter-subjects]}]]
   (-> (.jetStreamManagement conn)
-      (.getStreamInfo stream-name
+      (.getStreamInfo (name stream-name)
                       (cond-> ^StreamInfoOptions$Builder (StreamInfoOptions/builder)
                         include-deleted-details? (.deletedDetails)
                         (seq filter-subjects) (.filterSubjects (map name filter-subjects))
                         :always (.build)))))
 
 (defn ^:export get-cluster-info [conn stream-name & [options]]
-  (some-> (get-stream-info-object conn stream-name options)
+  (some-> (get-stream-info-object conn (name stream-name) options)
           .getClusterInfo
           cluster/cluster-info->map))
 
@@ -161,7 +161,7 @@
       template-owner (assoc :nats.stream/template-owner template-owner))))
 
 (defn ^:export get-stream-config [conn stream-name & [options]]
-  (-> (get-stream-info-object conn stream-name options)
+  (-> (get-stream-info-object conn (name stream-name) options)
       .getConfiguration
       configuration->map))
 
@@ -177,7 +177,7 @@
       (seq subject-transforms) (assoc :nats.source/subject-transforms subject-transforms))))
 
 (defn ^:export get-mirror-info [conn stream-name & [options]]
-  (-> (get-stream-info-object conn stream-name options)
+  (-> (get-stream-info-object conn (name stream-name) options)
       .getMirrorInfo
       source-info->map))
 
@@ -197,7 +197,7 @@
            :nats.subject/name (.getName subject)}))})
 
 (defn ^:export get-stream-state [conn stream-name & [options]]
-  (-> (get-stream-info-object conn stream-name options)
+  (-> (get-stream-info-object conn (name stream-name) options)
       .getStreamState
       stream-state->map))
 
@@ -215,7 +215,7 @@
       stream-state (assoc :stream-state (stream-state->map stream-state)))))
 
 (defn ^:export get-stream-info [conn stream-name & [options]]
-  (-> (get-stream-info-object conn stream-name options)
+  (-> (get-stream-info-object conn (name stream-name) options)
       stream-info->map))
 
 (defn get-stream-names [conn & [{:keys [subject-filter]}]]
@@ -266,22 +266,22 @@
 
 (defn ^:export get-first-message [conn stream-name subject]
   (-> (.jetStreamManagement conn)
-      (.getFirstMessage stream-name (name subject))
+      (.getFirstMessage (name stream-name) (name subject))
       message/message-info->map))
 
 (defn ^:export get-last-message [conn stream-name subject]
   (-> (.jetStreamManagement conn)
-      (.getLastMessage stream-name (name subject))
+      (.getLastMessage (name stream-name) (name subject))
       message/message-info->map))
 
 (defn ^:export get-message [conn stream-name seq]
   (-> (.jetStreamManagement conn)
-      (.getMessage stream-name seq)
+      (.getMessage (name stream-name) seq)
       message/message-info->map))
 
 (defn ^:export get-next-message [conn stream-name seq subject]
   (-> (.jetStreamManagement conn)
-      (.getNextMessage stream-name seq (name subject))
+      (.getNextMessage (name stream-name) seq (name subject))
       message/message-info->map))
 
 (defn ^{:style/indent 1 :export true} create-stream
@@ -337,11 +337,11 @@
 
 (defn ^:export delete-message [conn stream-name seq-n & [{:keys [erase?] :as opt}]]
   (if opt
-    (.deleteMessage (.jetStreamManagement conn) stream-name seq-n (boolean erase?))
-    (.deleteMessage (.jetStreamManagement conn) stream-name seq-n)))
+    (.deleteMessage (.jetStreamManagement conn) (name stream-name) seq-n (boolean erase?))
+    (.deleteMessage (.jetStreamManagement conn) (name stream-name) seq-n)))
 
 (defn ^:export delete-stream [conn stream-name]
-  (.deleteStream (.jetStreamManagement conn) stream-name))
+  (.deleteStream (.jetStreamManagement conn) (name stream-name)))
 
 (defn build-purge-options [{::keys [keep sequence subject]}]
   (cond-> ^PurgeOptions$Builder (PurgeOptions/builder)
@@ -351,4 +351,4 @@
 
 (defn ^:export purge-stream [conn stream-name & [opts]]
   (-> (.jetStreamManagement conn)
-      (.purgeStream stream-name (build-purge-options opts))))
+      (.purgeStream (name stream-name) (build-purge-options opts))))
