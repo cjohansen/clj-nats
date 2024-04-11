@@ -125,6 +125,9 @@
 (defn ^:export close [conn]
   (.close conn))
 
+(defn ^:export close [conn]
+  (.close conn))
+
 (defn ^{:style/indent 1 :export true} publish
   "Publish a message. Performs no publish acking; do not use for publishing to a
   JetStream subject, instead use `nats.stream/publish`.
