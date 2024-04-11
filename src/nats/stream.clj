@@ -211,7 +211,7 @@
       subject-transform (assoc :subject-transform subject-transform)
       template-owner (assoc :template-owner template-owner))))
 
-(defn ^:export get-config [conn stream-name & [options]]
+(defn ^:export get-stream-config [conn stream-name & [options]]
   (-> (get-stream-info-object conn stream-name options)
       .getConfiguration
       configuration->map))
@@ -268,7 +268,7 @@
   (-> (get-stream-info-object conn stream-name options)
       stream-info->map))
 
-(defn ^:export get-stream-names [conn & [{:keys [subject-filter]}]]
+(defn get-stream-names [conn & [{:keys [subject-filter]}]]
   (if subject-filter
     (.getStreamNames (.jetStreamManagement conn) subject-filter)
     (.getStreamNames (.jetStreamManagement conn))))

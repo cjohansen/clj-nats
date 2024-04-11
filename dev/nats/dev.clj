@@ -28,7 +28,7 @@
      :allow-direct-access? true
      :retention-policy :nats.retention-policy/limits})
 
-  (stream/get-config conn "test-stream")
+  (stream/get-stream-config conn "test-stream")
   (stream/get-stream-info conn "test-stream")
   (stream/get-stream-info conn "other-stream")
 
@@ -49,6 +49,7 @@
   (stream/get-streams conn)
   (stream/get-account-statistics conn)
   (stream/get-first-message conn "test-stream" "test.work.email.ed281046-938e-4096-8901-8bd6be6869ed")
+  (stream/get-first-message conn "test-stream" "test.work.email.*")
   (stream/get-last-message conn "test-stream" "test.work.email.ed281046-938e-4096-8901-8bd6be6869ed")
   (stream/get-message conn "test-stream" 3)
   (stream/get-next-message conn "test-stream" 2 "test.work.email.ed281046-938e-4096-8901-8bd6be6869ed")
