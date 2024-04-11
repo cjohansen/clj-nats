@@ -7,7 +7,7 @@
   (def conn (nats/connect "nats://127.0.0.1:4222"))
 
   (nats/publish conn
-    {::nats/subject "greet.joe"
+    {::message/subject "greet.joe"
      ::message/data "hello"})
 
   (def subscription (nats/subscribe conn "greet.*"))
@@ -15,23 +15,23 @@
   (def messages
     (future
       (loop [res []]
-        (if-let [message (nats/pull-message subscription 100)]
+        (if-let [message (nats/pull-message subscription 10)]
           (recur (conj res message))
           res))))
 
   (nats/publish conn
-    {::nats/subject "greet.bob"
-     :nats.message/data "Hello"})
+    {::message/subject "greet.bob"
+     ::message/data "Hello"})
 
   (nats/publish conn
-    {::nats/subject "greet.sue"
+    {::message/subject "greet.sue"
      ::message/data "Hi!"})
 
   (nats/publish conn
-    {::nats/subject "greet.pam"
+    {::message/subject "greet.pam"
      ::message/data "Howdy!"})
 
-  (Thread/sleep 200)
+  (Thread/sleep 50)
 
   (doseq [message @messages]
     (println (::message/data message) "on" (::message/subject message)))
