@@ -1,5 +1,6 @@
 (ns nats.stream
-  (:require [nats.core :as nats])
+  (:require [clojure.set :as set]
+            [nats.core :as nats])
   (:import (io.nats.client ConsumeOptions ConsumeOptions$Builder IterableConsumer
                            JetStream Message PublishOptions PublishOptions$Builder
                            PurgeOptions PurgeOptions$Builder)
@@ -27,8 +28,7 @@
    :nats.ack-policy/explicit AckPolicy/Explicit
    :nats.ack-policy/none AckPolicy/None})
 
-(def ack-policy->k
-  (into {} (map (juxt second first) ack-policies)))
+(def ack-policy->k (set/map-invert ack-policies))
 
 (def deliver-policies
   {:nats.deliver-policy/all DeliverPolicy/All
@@ -38,44 +38,38 @@
    :nats.deliver-policy/last-per-subject DeliverPolicy/LastPerSubject
    :nats.deliver-policy/new DeliverPolicy/New})
 
-(def deliver-policy->k
-  (into {} (map (juxt second first) deliver-policies)))
+(def deliver-policy->k (set/map-invert deliver-policies))
 
 (def replay-policies
   {:nats.replay-policy/limits ReplayPolicy/Instant
    :nats.replay-policy/work-queue ReplayPolicy/Original})
 
-(def replay-policy->k
-  (into {} (map (juxt second first) replay-policies)))
+(def replay-policy->k (set/map-invert replay-policies))
 
 (def retention-policies
   {:nats.retention-policy/limits RetentionPolicy/Limits
    :nats.retention-policy/work-queue RetentionPolicy/WorkQueue
    :nats.retention-policy/interest RetentionPolicy/Interest})
 
-(def retention-policy->k
-  (into {} (map (juxt second first) retention-policies)))
+(def retention-policy->k (set/map-invert retention-policies))
 
 (def discard-policies
   {:nats.discard-policy/new DiscardPolicy/New
    :nats.discard-policy/old DiscardPolicy/Old})
 
-(def discard-policy->k
-  (into {} (map (juxt second first) discard-policies)))
+(def discard-policy->k (set/map-invert discard-policies))
 
 (def compression-options
   {:nats.compression-option/none CompressionOption/None
    :nats.compression-option/s2 CompressionOption/S2})
 
-(def compression-option->k
-  (into {} (map (juxt second first) compression-options)))
+(def compression-option->k (set/map-invert compression-options))
 
 (def storage-types
   {:nats.storage-type/file StorageType/File
    :nats.storage-type/memory StorageType/Memory})
 
-(def storage-type->k
-  (into {} (map (juxt second first) storage-types)))
+(def storage-type->k (set/map-invert storage-types))
 
 (defn map->stream-configuration [{:keys [name
                                          description

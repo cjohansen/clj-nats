@@ -3,7 +3,8 @@
            (io.nats.client.api MessageInfo PublishAck)
            (io.nats.client.impl AckType Headers NatsJetStreamMetaData
                                 NatsMessage NatsMessage$Builder)
-           (io.nats.client.support Status)))
+           (io.nats.client.support Status))
+  (:require [clojure.set :as set]))
 
 (def ack-types
   {:nats.ack-type/ack AckType/AckAck
@@ -12,8 +13,7 @@
    :nats.ack-type/term AckType/AckTerm
    :nats.ack-type/next AckType/AckNext})
 
-(def ack-type->k
-  (into {} (map (juxt second first) ack-types)))
+(def ack-type->k (set/map-invert ack-types))
 
 (defn map->Headers [headers]
   (let [headers-obj ^Headers (Headers.)]
