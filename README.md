@@ -17,43 +17,43 @@ few ways.
 
 ### Clojure data
 
-All functions take native Clojure data as arguments instead of opaque instances
-of jnats option classes. Almost all functions return pure Clojure data instead
-of instances of jnats information classes.
+All functions take native Clojure data as arguments instead of instances of
+jnats option classes. Almost all functions return Clojure data instead of
+instances of jnats data classes.
 
-The only exceptions are Java time classes, because they are immutable values,
-and not easily represented without their wrappers. Specifically, clj-nats uses
+The only exceptions are Java time classes, as they are immutable values, and not
+easily represented without their wrappers. Specifically, clj-nats uses
 `java.time.Duration` (timeouts etc) and `java.time.Instant` (timestamps etc).
 [java-time-literals](https://github.com/magnars/java-time-literals) is
 recommended as a companion library to represent even these as data literals.
 
-clj-nats supports keywords for subjects.
+clj-nats supports keywords for subjects and stream names.
 
 ### EDN messages
 
-clj-nats automatically encodes and decodes EDN messages. Publish Clojure data,
-and automatically have Clojure data decoded when subscribing for messages.
-clj-nats sets a header on your messages to achieve this.
+clj-nats automatically encodes and decodes EDN messages when appropriate. No
+need to convert messages to binary by hand. clj-nats sets a header on your
+messages to do this safely and transparently.
 
-### Opinionated feature subset
+### Opinionated (smaller) feature subset
 
-clj-nats wraps a subset of jnats. Where jnats offers many ways to solve most
-tasks, clj-nats only provides the most flexible approach, leaving you with
-enough leverage to cater to your own preferences. As an example, jnats has
-`publish` and `publishAsync`, while clj-nats only provides `publish`. If you
-want async, you can wrap it in a `future`, create a virtual thread, or choose
-any number of other ways to publish off the main thread.
+clj-nats wraps a subset of jnats. jnats offers many ways to solve most tasks.
+clj-nats only provides the most flexible approach, leaving you with enough
+leverage to cater to your own preferences. As an example, jnats has `publish`
+and `publishAsync`, while clj-nats only provides `publish`. If you want async,
+you can wrap it in a `future`, create a virtual thread, or choose any number of
+other ways to publish off the main thread.
 
 ### Instants for timestamps
 
-jnats uses `ZonedDateTime` for all timestamps with a GMT timezone. Because
-timestamps are instants, this is an unnecessary detour, so clj-nats operates
-strictly with `java.time.Instant`, both for inputs and outputs.
+jnats uses `java.time.ZonedDateTime` for all timestamps with a GMT timezone.
+Because timestamps are instants, this is an unnecessary detour, so clj-nats
+operates strictly with `java.time.Instant`, both for inputs and outputs.
 
 ### Flat structure
 
-clj-nats has a flat structure loosely inspired by the `nats` CLI. The goal is to
-make it easy to translate CLI examples to clj-nats usage.
+clj-nats is organized in a flat structure loosely inspired by the `nats` CLI.
+The goal is to make it easy to translate CLI examples to clj-nats usage.
 
 ## Usage
 
@@ -133,13 +133,13 @@ Create a consumer:
 (def conn (nats/connect "nats://localhost:4222"))
 
 (consumer/create-consumer conn
-  {::consumer/stream-name "test-stream"
-   ::consumer/name "test-consumer"
+  {::consumer/stream-name :test-stream
+   ::consumer/name :test-consumer
    ::consumer/durable? true
-   ::consumer/filter-subject "test.work.>"})
+   ::consumer/filter-subject :test.work.>})
 
 ;; Review its configuration
-(stream/get-consumer-info conn "test-stream" "test-consumer")
+(stream/get-consumer-info conn :test-stream :test-consumer)
 ```
 
 Consume messages:
@@ -151,7 +151,7 @@ Consume messages:
 
 (def conn (nats/connect "nats://localhost:4222"))
 
-(with-open [subscription (consumer/subscribe conn "test-stream" "test-consumer")]
+(with-open [subscription (consumer/subscribe conn :test-stream :test-consumer)]
   (let [message (consumer/pull-message subscription 1000)] ;; Wait for up to 1000ms
     (consumer/ack conn message)
     (prn message)))
@@ -162,20 +162,20 @@ Review stream configuration and state:
 ```clj
 (require '[nats.stream :as stream])
 
-(stream/get-stream-config conn "test-stream")
-(stream/get-stream-info conn "test-stream")
-(stream/get-stream-state conn "test-stream")
-(stream/get-mirror-info conn "test-stream")
-(stream/get-consumers conn "test-stream")
+(stream/get-stream-config conn :test-stream)
+(stream/get-stream-info conn :test-stream)
+(stream/get-stream-state conn :test-stream)
+(stream/get-mirror-info conn :test-stream)
+(stream/get-consumers conn :test-stream)
 ```
 
 Peek at some messages from the stream:
 
 ```clj
-(stream/get-first-message conn "test-stream" "test.work.email.*")
-(stream/get-last-message conn "test-stream" "test.work.email.*")
-(stream/get-message conn "test-stream" 3)
-(stream/get-next-message conn "test-stream" 2 "test.work.email.*)
+(stream/get-first-message conn :test-stream :test.work.email.*)
+(stream/get-last-message conn :test-stream :test.work.email.*)
+(stream/get-message conn :test-stream 3)
+(stream/get-next-message conn :test-stream 2 :test.work.email.*)
 ```
 
 Get information from the server:
