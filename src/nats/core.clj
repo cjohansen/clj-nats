@@ -75,43 +75,48 @@
      :time (.getTime message)}))
 
 (defn status->map [^Status status]
-  {:code (.getCode status)
-   :message (.getMessage status)
-   :message-with-code (.getMessageWithCode status)
-   :flow-control? (.isFlowControl status)
-   :heartbeat? (.isHeartbeat status)
-   :no-responders? (.isNoResponders status)})
+  (when status
+    {:code (.getCode status)
+     :message (.getMessage status)
+     :message-with-code (.getMessageWithCode status)
+     :flow-control? (.isFlowControl status)
+     :heartbeat? (.isHeartbeat status)
+     :no-responders? (.isNoResponders status)}))
 
 (defn jet-stream-metadata->map [^NatsJetStreamMetaData metadata]
-  {:domain (.getDomain metadata)
-   :stream (.getStream metadata)
-   :consumer (.getConsumer metadata)
-   :delivered-count (.getDelivered metadata)
-   :stream-sequence (.streamSequence metadata)
-   :consumer-sequence (.consumerSequence metadata)
-   :pending-count (.pendingCount metadata)
-   :timestamp (.toInstant (.timestamp metadata))})
+  (let [domain (.getDomain metadata)]
+    (cond-> {:stream (.getStream metadata)
+             :consumer (.getConsumer metadata)
+             :delivered-count (.deliveredCount metadata)
+             :stream-sequence (.streamSequence metadata)
+             :consumer-sequence (.consumerSequence metadata)
+             :pending-count (.pendingCount metadata)
+             :timestamp (.toInstant (.timestamp metadata))}
+      domain (assoc :domain domain))))
 
 (defn message->map [^Message message]
-  (let [headers (headers->map (.getHeaders message))]
-    {:consume-byte-count (.consumeByteCount message)
-     :data (get-message-data headers (.getData message))
-     :headers headers
-     :reply-to (.getReplyTo message)
-     :SID (.getSID message)
-     :status (status->map (.getStatus message))
-     :subject (.getSubject message)
-     :has-headers? (.hasHeaders message)
-     :jet-stream? (.isJetStream message)
-     :status-message? (.isStatusMessage message)
-     :last-ack (some-> (.lastAck message) ack-type->k)
-     :metadata (jet-stream-metadata->map (.metaData message))}))
+  (let [headers (headers->map (.getHeaders message))
+        status (status->map (.getStatus message))
+        last-ack (.lastAck message)]
+    (cond-> {:consume-byte-count (.consumeByteCount message)
+             :data (get-message-data headers (.getData message))
+             :headers headers
+             :reply-to (.getReplyTo message)
+             :SID (.getSID message)
+             :subject (.getSubject message)
+             :has-headers? (.hasHeaders message)
+             :jet-stream? (.isJetStream message)
+             :status-message? (.isStatusMessage message)
+             :metadata (jet-stream-metadata->map (.metaData message))}
+      status (assoc :status status)
+      last-ack (assoc :last-ack (ack-type->k last-ack)))))
 
 (defn publish-ack->map [^PublishAck ack]
-  {:domain (.getDomain ack)
-   :seq-no (.getSeqno ack)
-   :stream (.getStream ack)
-   :duplicate? (.isDuplicate ack)})
+  (when ack
+    {:domain (.getDomain ack)
+     :seq-no (.getSeqno ack)
+     :stream (.getStream ack)
+     :duplicate? (.isDuplicate ack)}))
 
 (defn ^:export connect [uri]
   (Nats/connect uri))

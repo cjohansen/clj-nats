@@ -1,18 +1,16 @@
 (ns nats.stream
   (:require [nats.cluster :as cluster]
             [nats.core :as nats])
-  (:import (io.nats.client JetStreamSubscription PublishOptions
-                           PublishOptions$Builder PullSubscribeOptions
-                           PullSubscribeOptions$Builder PurgeOptions
-                           PurgeOptions$Builder)
-           (io.nats.client.api AccountLimits AccountStatistics AccountTier AckPolicy
-                               ApiStats CompressionOption ConsumerConfiguration
+  (:import (io.nats.client ConsumeOptions ConsumeOptions$Builder IterableConsumer
+                           JetStream Message PublishOptions PublishOptions$Builder
+                           PurgeOptions PurgeOptions$Builder)
+           (io.nats.client.api AccountLimits AccountStatistics AccountTier
+                               AckPolicy ApiStats CompressionOption ConsumerConfiguration
                                ConsumerConfiguration$Builder ConsumerInfo ConsumerLimits
-                               DeliverPolicy DiscardPolicy External Placement
-                               ReplayPolicy Republish RetentionPolicy SourceBase
-                               SourceInfoBase StorageType StreamConfiguration
-                               StreamInfo StreamInfoOptions StreamInfoOptions$Builder
-                               StreamState Subject SubjectTransform)
+                               DeliverPolicy DiscardPolicy External Placement ReplayPolicy
+                               Republish RetentionPolicy SourceBase SourceInfoBase
+                               StorageType StreamConfiguration StreamInfo StreamInfoOptions
+                               StreamInfoOptions$Builder StreamState Subject SubjectTransform)
            (io.nats.client.impl AckType)
            (java.time Instant ZoneId)))
 
@@ -97,7 +95,7 @@
   (cond-> (StreamConfiguration/builder)
     name (.name name)
     description (.name description)
-    subjects (.subjects (into-array String (map name subjects)))
+    subjects (.subjects (into-array String (map clojure.core/name subjects)))
     retention-policy (.retentionPolicy (retention-policies retention-policy))
     (boolean? allow-direct-access?) (.allowDirect allow-direct-access?)
     (boolean? allow-rollup?) (.allowRollup allow-rollup?)
@@ -372,28 +370,18 @@
   [conn message & [opts]]
   (assert (not (nil? (:subject message))) "Can't publish without data")
   (assert (not (nil? (:data message))) "Can't publish nil data")
-  (->> (nats/build-message message)
-       (.publish (.jetStream conn) (build-publish-options opts))
+  (->> ^PublishOptions (build-publish-options opts)
+       (.publish ^JetStream (.jetStream conn) ^Message (nats/build-message message))
        nats/publish-ack->map))
-
-(defn ^{:style/indent 1 :export true} publish-async
-  "Like `publish`, but does not block. Returns a future."
-  [conn message & [opts]]
-  (assert (not (nil? (:subject message))) "Can't publish without data")
-  (assert (not (nil? (:data message))) "Can't publish nil data")
-  (future
-    (->> (nats/build-message message)
-         (.publishAsync (.jetStream conn) (build-publish-options opts))
-         deref
-         nats/publish-ack->map)))
 
 (defn build-consumer-configuration
   [{:keys [ack-policy ack-wait backoff deliver-group deliver-policy deliver-subject
-           description durable filter-subject filter-subjects flow-control
+           description durable? filter-subject filter-subjects flow-control
            headers-only? idle-heartbeat inactive-threshold max-ack-pending max-batch
            max-bytes max-deliver max-expires max-pull-waiting mem-storage? metadata
-           name num-replicas pause-until rate-limit replay-policy sample-frequency
+           consumer-name num-replicas pause-until rate-limit replay-policy sample-frequency
            start-sequence sequence start-time]}]
+  (assert (when durable? (not (nil? consumer-name))) "Durable consumers must have a :consumer-name")
   (cond-> ^ConsumerConfiguration$Builder (ConsumerConfiguration/builder)
     (ack-policies ack-policy) (.ackPolicy (ack-policies ack-policy))
     ack-wait (.ackWait ack-wait)
@@ -402,7 +390,7 @@
     (deliver-policies deliver-policy) (.deliverPolicy (deliver-policies deliver-policy))
     deliver-subject (.deliverSubject (name deliver-subject))
     description (.description description)
-    durable (.durable durable)
+    durable? (.durable consumer-name)
     filter-subject (.filterSubject (name filter-subject))
     filter-subjects (.filterSubjects (map name filter-subjects))
     flow-control (.flowControl flow-control)
@@ -417,7 +405,7 @@
     max-pull-waiting (.maxPullWaiting max-pull-waiting)
     mem-storage? (.memStorage mem-storage?)
     metadata (.metadata metadata)
-    name (.name name)
+    (and consumer-name (not durable?)) (.name consumer-name)
     num-replicas (.numReplicas num-replicas)
     pause-until (.pauseUntil pause-until)
     rate-limit (.rateLimit rate-limit)
@@ -452,7 +440,7 @@
    :max-expires (.getMaxExpires config)
    :max-pull-waiting (.getMaxPullWaiting config)
    :metadata (into {} (.getMetadata config))
-   :name (.getName config)
+   :consumer-name (.getName config)
    :num-replicas (.getNumReplicas config)
    :pause-until (.getPauseUntil config)
    :rate-limit (.getRateLimit config)
@@ -495,13 +483,13 @@
    :timestamp (some-> (.getTimestamp info) .toInstant)
    :push-bound? (.isPushBound info)})
 
-(defn ^{:style/indent 1 :export true} create-consumer [conn stream-name configuration]
+(defn ^{:style/indent 1 :export true} create-consumer [conn {:keys [stream-name] :as configuration}]
   (->> (build-consumer-configuration configuration)
        (.addOrUpdateConsumer (.jetStreamManagement conn) stream-name)
        consumer-info->map))
 
-(defn ^{:style/indent 1 :export true} update-consumer [conn stream-name configuration]
-  (create-consumer conn stream-name configuration))
+(defn ^{:style/indent 1 :export true} update-consumer [conn configuration]
+  (create-consumer conn configuration))
 
 (defn ^:export delete-consumer [conn stream-name consumer-name]
   (.deleteConsumer (.jetStreamManagement conn) stream-name consumer-name))
@@ -545,35 +533,30 @@
       (.resumeConsumer stream-name consumer-name)
       stream-info->map))
 
-(defn build-pull-subscribe-options [{:keys [bind? configuration durable fast-bind?
-                                            message-alarm-time name stream]}]
-  (cond-> ^PullSubscribeOptions$Builder (PullSubscribeOptions/builder)
-    (boolean? bind?) (.bind bind?)
-    configuration (.configuration configuration)
-    durable (.durable durable)
-    (boolean? fast-bind?) (.fastBind fast-bind?)
-    message-alarm-time (.messageAlarmTime message-alarm-time)
-    name (.name name)
-    stream (.stream stream)))
+(defn build-consume-options [{:keys [batch-bytes batch-size bytes threshold-pct]}]
+  (cond-> ^ConsumeOptions$Builder (ConsumeOptions/builder)
+    batch-bytes (.batchBytes batch-bytes)
+    batch-size (.batchSize batch-size)
+    bytes (.bytes bytes)
+    threshold-pct (.thresholdPercent threshold-pct)
+    :then (.build)))
 
-(defn ^:export subscribe
-  "Subscribe to subject with additional `options`. See `build-pull-options` for
-  details on available options."
-  [conn subject & [options]]
-  (.subscribe (.jetStream conn) subject (build-pull-subscribe-options options)))
+(defn ^{:style/indent 1 :export true} subscribe
+  "Subscribe to messages on `stream-name` for `consumer-name`. Refer to
+  `build-consume-options` for keys in `opts`."
+  [conn stream-name consumer-name & [opts]]
+  (-> (.getStreamContext conn stream-name)
+      (.getConsumerContext consumer-name)
+      (.iterate (build-consume-options opts))))
 
-(defn ^:export fetch
-  "Fetch `n` messages from `subscription`, waiting for a maximum of
-  `max-wait` (either number of milliseconds or a `java.time.Duration`)."
-  [^JetStreamSubscription subscription n max-wait]
-  (->> (.fetch subscription n max-wait)
-       (map nats/message->map)))
+(defn pull-message [^IterableConsumer subscription timeout]
+  (some-> (.nextMessage subscription timeout) nats/message->map))
 
-(defn ^:export ack-ack [conn message]
+(defn ^:export ack [conn message]
   (nats/publish conn {:subject (:reply-to message)
                       :data (.bodyBytes AckType/AckAck -1)}))
 
-(defn ^:export ack-nak [conn message]
+(defn ^:export nak [conn message]
   (nats/publish conn {:subject (:reply-to message)
                       :data (.bodyBytes AckType/AckNak -1)}))
 
