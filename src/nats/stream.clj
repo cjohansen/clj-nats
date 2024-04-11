@@ -1,14 +1,19 @@
 (ns nats.stream
   (:require [nats.cluster :as cluster]
             [nats.core :as nats])
-  (:import (io.nats.client PurgeOptions PurgeOptions$Builder PublishOptions PublishOptions$Builder)
-           (io.nats.client.api AccountLimits AccountStatistics AccountTier ConsumerConfiguration
-                               ConsumerConfiguration$Builder DeliverPolicy
-                               ReplayPolicy AckPolicy ApiStats CompressionOption ConsumerLimits
-                               DiscardPolicy External Placement Republish RetentionPolicy SourceBase
-                               SourceInfoBase StorageType StreamConfiguration ConsumerInfo StreamInfo
-                               StreamInfoOptions StreamInfoOptions$Builder StreamState Subject
-                               SubjectTransform)
+  (:import (io.nats.client JetStreamSubscription PublishOptions
+                           PublishOptions$Builder PullSubscribeOptions
+                           PullSubscribeOptions$Builder PurgeOptions
+                           PurgeOptions$Builder)
+           (io.nats.client.api AccountLimits AccountStatistics AccountTier AckPolicy
+                               ApiStats CompressionOption ConsumerConfiguration
+                               ConsumerConfiguration$Builder ConsumerInfo ConsumerLimits
+                               DeliverPolicy DiscardPolicy External Placement
+                               ReplayPolicy Republish RetentionPolicy SourceBase
+                               SourceInfoBase StorageType StreamConfiguration
+                               StreamInfo StreamInfoOptions StreamInfoOptions$Builder
+                               StreamState Subject SubjectTransform)
+           (io.nats.client.impl AckType)
            (java.time Instant ZoneId)))
 
 (def default-tz
@@ -539,3 +544,43 @@
   (-> (.jetStreamManagement conn)
       (.resumeConsumer stream-name consumer-name)
       stream-info->map))
+
+(defn build-pull-subscribe-options [{:keys [bind? configuration durable fast-bind?
+                                            message-alarm-time name stream]}]
+  (cond-> ^PullSubscribeOptions$Builder (PullSubscribeOptions/builder)
+    (boolean? bind?) (.bind bind?)
+    configuration (.configuration configuration)
+    durable (.durable durable)
+    (boolean? fast-bind?) (.fastBind fast-bind?)
+    message-alarm-time (.messageAlarmTime message-alarm-time)
+    name (.name name)
+    stream (.stream stream)))
+
+(defn ^:export subscribe
+  "Subscribe to subject with additional `options`. See `build-pull-options` for
+  details on available options."
+  [conn subject & [options]]
+  (.subscribe (.jetStream conn) subject (build-pull-subscribe-options options)))
+
+(defn ^:export fetch
+  "Fetch `n` messages from `subscription`, waiting for a maximum of
+  `max-wait` (either number of milliseconds or a `java.time.Duration`)."
+  [^JetStreamSubscription subscription n max-wait]
+  (->> (.fetch subscription n max-wait)
+       (map nats/message->map)))
+
+(defn ^:export ack-ack [conn message]
+  (nats/publish conn {:subject (:reply-to message)
+                      :data (.bodyBytes AckType/AckAck -1)}))
+
+(defn ^:export ack-nak [conn message]
+  (nats/publish conn {:subject (:reply-to message)
+                      :data (.bodyBytes AckType/AckNak -1)}))
+
+(defn ^:export ack-in-progress [conn message]
+  (nats/publish conn {:subject (:reply-to message)
+                      :data (.bodyBytes AckType/AckProgress -1)}))
+
+(defn ^:export ack-term [conn message]
+  (nats/publish conn {:subject (:reply-to message)
+                      :data (.bodyBytes AckType/AckTerm -1)}))

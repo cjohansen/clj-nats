@@ -1,7 +1,19 @@
 (ns nats.core
-  (:import (io.nats.client Nats)
+  (:import (io.nats.client Message Nats)
            (io.nats.client.api MessageInfo PublishAck)
-           (io.nats.client.impl Headers NatsMessage NatsMessage$Builder)))
+           (io.nats.client.impl AckType Headers NatsJetStreamMetaData
+                                NatsMessage NatsMessage$Builder)
+           (io.nats.client.support Status)))
+
+(def ack-types
+  {:nats.ack-type/ack AckType/AckAck
+   :nats.ack-type/nak AckType/AckNak
+   :nats.ack-type/progress AckType/AckProgress
+   :nats.ack-type/term AckType/AckTerm
+   :nats.ack-type/next AckType/AckNext})
+
+(def ack-type->k
+  (into {} (map (juxt second first) ack-types)))
 
 (defn map->Headers [headers]
   (let [headers-obj ^Headers (Headers.)]
@@ -46,18 +58,54 @@
 (defn bytes->edn [data]
   (read-string (String. data)))
 
+(defn get-message-data [headers data]
+  (let [content-type (first (get headers "content-type"))]
+    (cond-> data
+      (= "text/plain" content-type) (String.)
+      (= "application/edn" content-type) bytes->edn)))
+
 (defn message-info->map [^MessageInfo message]
-  (let [headers (headers->map (.getHeaders message))
-        content-type (first (get headers "content-type"))]
-    {:data (cond-> (.getData message)
-             (= "text/plain" content-type) (String.)
-             (= "application/edn" content-type) bytes->edn)
+  (let [headers (headers->map (.getHeaders message))]
+    {:data (get-message-data headers (.getData message))
      :headers headers
      :last-seq (.getLastSeq message)
      :seq (.getSeq message)
      :stream (.getStream message)
      :subject (.getSubject message)
      :time (.getTime message)}))
+
+(defn status->map [^Status status]
+  {:code (.getCode status)
+   :message (.getMessage status)
+   :message-with-code (.getMessageWithCode status)
+   :flow-control? (.isFlowControl status)
+   :heartbeat? (.isHeartbeat status)
+   :no-responders? (.isNoResponders status)})
+
+(defn jet-stream-metadata->map [^NatsJetStreamMetaData metadata]
+  {:domain (.getDomain metadata)
+   :stream (.getStream metadata)
+   :consumer (.getConsumer metadata)
+   :delivered-count (.getDelivered metadata)
+   :stream-sequence (.streamSequence metadata)
+   :consumer-sequence (.consumerSequence metadata)
+   :pending-count (.pendingCount metadata)
+   :timestamp (.toInstant (.timestamp metadata))})
+
+(defn message->map [^Message message]
+  (let [headers (headers->map (.getHeaders message))]
+    {:consume-byte-count (.consumeByteCount message)
+     :data (get-message-data headers (.getData message))
+     :headers headers
+     :reply-to (.getReplyTo message)
+     :SID (.getSID message)
+     :status (status->map (.getStatus message))
+     :subject (.getSubject message)
+     :has-headers? (.hasHeaders message)
+     :jet-stream? (.isJetStream message)
+     :status-message? (.isStatusMessage message)
+     :last-ack (some-> (.lastAck message) ack-type->k)
+     :metadata (jet-stream-metadata->map (.metaData message))}))
 
 (defn publish-ack->map [^PublishAck ack]
   {:domain (.getDomain ack)
