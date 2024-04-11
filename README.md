@@ -24,8 +24,8 @@ instances of jnats data classes.
 The only exceptions are Java time classes, as they are immutable values, and not
 easily represented without their wrappers. Specifically, clj-nats uses
 `java.time.Duration` (timeouts etc) and `java.time.Instant` (timestamps etc).
-[java-time-literals](https://github.com/magnars/java-time-literals) is
-recommended as a companion library to represent even these as data literals.
+With [java-time-literals](https://github.com/magnars/java-time-literals) even
+these will be represented as data literals.
 
 clj-nats supports keywords for subjects and stream names.
 
