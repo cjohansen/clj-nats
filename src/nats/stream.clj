@@ -1,16 +1,16 @@
 (ns nats.stream
-  (:require [nats.cluster :as cluster]
-            [nats.core :as nats])
+  (:require [nats.core :as nats])
   (:import (io.nats.client ConsumeOptions ConsumeOptions$Builder IterableConsumer
                            JetStream Message PublishOptions PublishOptions$Builder
                            PurgeOptions PurgeOptions$Builder)
-           (io.nats.client.api AccountLimits AccountStatistics AccountTier
-                               AckPolicy ApiStats CompressionOption ConsumerConfiguration
+           (io.nats.client.api AccountLimits AccountStatistics AccountTier AckPolicy
+                               ApiStats ClusterInfo CompressionOption ConsumerConfiguration
                                ConsumerConfiguration$Builder ConsumerInfo ConsumerLimits
-                               DeliverPolicy DiscardPolicy External Placement ReplayPolicy
-                               Republish RetentionPolicy SourceBase SourceInfoBase
-                               StorageType StreamConfiguration StreamInfo StreamInfoOptions
-                               StreamInfoOptions$Builder StreamState Subject SubjectTransform)
+                               DeliverPolicy DiscardPolicy External PeerInfo Placement
+                               ReplayPolicy Republish RetentionPolicy SourceBase
+                               SourceInfoBase StorageType StreamConfiguration StreamInfo
+                               StreamInfoOptions StreamInfoOptions$Builder StreamState
+                               Subject SubjectTransform)
            (io.nats.client.impl AckType)
            (java.time Instant ZoneId)))
 
@@ -119,10 +119,21 @@
                         (seq filter-subjects) (.filterSubjects (map name filter-subjects))
                         :always (.build)))))
 
+(defn cluster-info->map [^ClusterInfo cluster-info]
+  (when cluster-info
+    {:leader (.getLeader cluster-info)
+     :name (.getName cluster-info)
+     :replicas (for [^PeerInfo replica (.getReplicas cluster-info)]
+                 {:active (.getActive replica)
+                  :lag (.getLag replica)
+                  :name (.getName replica)
+                  :current? (.isCurrent replica)
+                  :offline? (.isOffline replica)})}))
+
 (defn ^:export get-cluster-info [conn stream-name & [options]]
   (some-> (get-stream-info-object conn stream-name options)
           .getClusterInfo
-          cluster/cluster-info->map))
+          cluster-info->map))
 
 (defn subject-transform->map [^SubjectTransform transform]
   {:destination (.getDestionation transform)
@@ -249,7 +260,7 @@
              :configuration (configuration->map (.getConfiguration info))
              :timestamp (some-> (.getTimestamp info) .toInstant)}
       (seq source-infos) (assoc :source-infos source-infos)
-      cluster-info (assoc :cluster-info (cluster/cluster-info->map cluster-info))
+      cluster-info (assoc :cluster-info (cluster-info->map cluster-info))
       mirror-info (assoc :mirror-info (source-info->map mirror-info))
       stream-state (assoc :stream-state (stream-state->map stream-state)))))
 
@@ -468,7 +479,7 @@
 (defn consumer-info->map [^ConsumerInfo info]
   {:ack-floor (some-> (.getAckFloor info) .getLastActive)
    :calculated-pending (.getCalculatedPending info)
-   :cluster-info (cluster/cluster-info->map (.getClusterInfo info))
+   :cluster-info (cluster-info->map (.getClusterInfo info))
    :consumer-configuration (consumer-configuration->map (.getConsumerConfiguration info))
    :creation-time (some-> (.getCreationTime info) .toInstant)
    :delivered (some-> (.getDelivered info) .getLastActive)
