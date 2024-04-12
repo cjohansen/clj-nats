@@ -18,6 +18,13 @@ The API is still under development and is subject to change. Once set, it will
 remain backwards compatible. An official release is expected in April 2024.
 Until then, use at risk of breaking changes.
 
+- [x] PubSub
+- [x] Streams
+- [x] Consumers
+- [ ] Request/response
+- [ ] Key/value store
+- [ ] Object store
+
 ## Rationale
 
 clj-nats aims to be an easy to use Clojure client for NATS. It does this in a
