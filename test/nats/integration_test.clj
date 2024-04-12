@@ -236,13 +236,13 @@
 
   (testing "Gets all streams from the server"
     (let [res (run-stream-example)]
-      (= (->> (:streams res)
-              (filter (comp #(re-find #"^clj-nats-.*" %)
-                            :nats.stream/name
-                            :nats.stream/configuration))
-              first
-              :nats.stream/configuration)
-         (:stream-config res))))
+      (is (= (->> (:streams res)
+                  (filter (comp #(re-find #"^clj-nats-.*" %)
+                                :nats.stream/name
+                                :nats.stream/configuration))
+                  first
+                  :nats.stream/configuration)
+             (:stream-config res)))))
 
   (testing "Gets account statistics from the server"
     (is (not (nil? (->> (:account-statistics (run-stream-example))
