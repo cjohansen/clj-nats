@@ -219,9 +219,10 @@
       stream-info->map))
 
 (defn get-stream-names [conn & [{:keys [subject-filter]}]]
-  (if subject-filter
-    (.getStreamNames (.jetStreamManagement conn) subject-filter)
-    (.getStreamNames (.jetStreamManagement conn))))
+  (set
+   (if subject-filter
+     (.getStreamNames (.jetStreamManagement conn) subject-filter)
+     (.getStreamNames (.jetStreamManagement conn)))))
 
 (defn ^:export get-streams [conn & [{:keys [subject-filter]}]]
   (->> (if subject-filter
