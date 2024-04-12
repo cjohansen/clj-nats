@@ -1,4 +1,4 @@
-(ns nats.cluster
+(ns ^:no-doc nats.cluster
   (:import (io.nats.client.api ClusterInfo PeerInfo)))
 
 (defn cluster-info->map [^ClusterInfo cluster-info]
