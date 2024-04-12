@@ -71,7 +71,7 @@
      ::seq (.getSeq message)
      ::stream (.getStream message)
      ::subject (.getSubject message)
-     ::received-at (.getTime message)}))
+     ::received-at (.toInstant (.getTime message))}))
 
 (defn status->map [^Status status]
   (when status

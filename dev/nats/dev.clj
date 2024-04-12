@@ -56,7 +56,7 @@
   (stream/get-first-message conn "test-stream" "test.work.email.*")
   (stream/get-last-message conn "test-stream" "test.work.email.ed281046-938e-4096-8901-8bd6be6869ed")
   (stream/get-message conn "test-stream" 3)
-  (stream/get-next-message conn "":test-stream 2 "test.work.email.ed281046-938e-4096-8901-8bd6be6869ed")
+  (stream/get-next-message conn "test-stream" 2 "test.work.email.ed281046-938e-4096-8901-8bd6be6869ed")
 
   (consumer/create-consumer conn
     {::consumer/stream-name "test-stream"
@@ -64,7 +64,7 @@
 
   (consumer/get-consumer-info conn "test-stream" "worker")
   (consumer/delete-consumer conn "test-stream" "worker")
-  (consumer/get-consumer-names conn "":test-stream)
+  (consumer/get-consumer-names conn "test-stream")
   (consumer/get-consumers conn "test-stream")
 
   (consumer/create-consumer conn

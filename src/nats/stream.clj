@@ -159,30 +159,32 @@
    :total (.getTotal api)})
 
 (defn ^:no-doc account-limits->map [^AccountLimits limits]
-  {:max-ack-pending (.getMaxAckPending limits)
-   :max-consumers (.getMaxConsumers limits)
-   :max-memory (.getMaxMemory limits)
-   :max-storage (.getMaxStorage limits)
-   :max-streams (.getMaxStreams limits)
-   :memory-max-stream-bytes (.getMemoryMaxStreamBytes limits)
-   :storage-max-stream-bytes (.getStorageMaxStreamBytes limits)
-   :max-bytes-required? (.isMaxBytesRequired limits)})
+  {:nats.account.limits/max-ack-pending (.getMaxAckPending limits)
+   :nats.account.limits/max-consumers (.getMaxConsumers limits)
+   :nats.account.limits/max-memory (.getMaxMemory limits)
+   :nats.account.limits/max-storage (.getMaxStorage limits)
+   :nats.account.limits/max-streams (.getMaxStreams limits)
+   :nats.account.limits/memory-max-stream-bytes (.getMemoryMaxStreamBytes limits)
+   :nats.account.limits/storage-max-stream-bytes (.getStorageMaxStreamBytes limits)
+   :nats.account.limits/max-bytes-required? (.isMaxBytesRequired limits)})
 
 (defn ^:no-doc account-tier->map [^AccountTier tier]
-  {:limits (account-limits->map (.getLimits tier))
-   :consumers (.getConsumers tier)
-   :memory (.getMemory tier)
-   :storage (.getStorage tier)
-   :streams (.getStreams tier)})
+  {:nats.account.tier/limits (account-limits->map (.getLimits tier))
+   :nats.account.tier/consumers (.getConsumers tier)
+   :nats.account.tier/memory (.getMemory tier)
+   :nats.account.tier/storage (.getStorage tier)
+   :nats.account.tier/streams (.getStreams tier)})
 
 (defn ^:no-doc account-statistics->map [^AccountStatistics stats]
-  {:api-stats (api-stats->map (.getApi stats))
-   :consumers (.getConsumers stats)
-   :limits (account-limits->map (.getLimits stats))
-   :memory (.getMemory stats)
-   :storage (.getStorage stats)
-   :streams (.getStreams stats)
-   :tiers (update-vals (.getTiers stats) account-tier->map)})
+  (let [tiers (.getTiers stats)]
+    (cond-> {:nats.account/api-stats (api-stats->map (.getApi stats))
+             :nats.account/consumers (.getConsumers stats)
+             :nats.account/limits (account-limits->map (.getLimits stats))
+             :nats.account/memory (.getMemory stats)
+             :nats.account/storage (.getStorage stats)
+             :nats.account/streams (.getStreams stats)}
+      (not-empty tiers)
+      (assoc :nats.account/tiers (update-vals tiers account-tier->map)))))
 
 ;; Build option classes
 
@@ -237,6 +239,12 @@
     stream-timeout (.streamTimeout stream-timeout)
     :then (.build)))
 
+(defn ^:no-doc build-purge-options [{:keys [keep sequence subject]}]
+  (cond-> ^PurgeOptions$Builder (PurgeOptions/builder)
+    keep (.keep keep)
+    sequence (.sequence sequence)
+    subject (.subject subject)))
+
 ;; Helper function
 
 (defn ^:no-doc get-stream-info-object
@@ -272,9 +280,9 @@
   - `:include-deleted-details?`
   - `:filter-subjects`"
   [conn stream-name & [opts]]
-  (-> (get-stream-info-object conn stream-name opts)
-      .getMirrorInfo
-      source-info->map))
+  (some-> (get-stream-info-object conn stream-name opts)
+          .getMirrorInfo
+          source-info->map))
 
 (defn ^:export get-stream-state
   "Get the state for `stream-name`. `opts` is a map of:
@@ -399,12 +407,6 @@
 
 (defn ^:export delete-stream [conn stream-name]
   (.deleteStream (.jetStreamManagement conn) stream-name))
-
-(defn ^:no-doc build-purge-options [{:keys [keep sequence subject]}]
-  (cond-> ^PurgeOptions$Builder (PurgeOptions/builder)
-    keep (.keep keep)
-    sequence (.sequence sequence)
-    subject (.subject subject)))
 
 (defn ^:export purge-stream
   "Purge stream `stream-name`. `opts` is a map of:
