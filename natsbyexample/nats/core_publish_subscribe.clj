@@ -1,14 +1,13 @@
 (ns nats.core-publish-subscribe
-  (:require [nats.core :as nats]
-            [nats.message :as message])
+  (:require [nats.core :as nats])
   (:import (java.io IOException)))
 
 (try
   (def conn (nats/connect "nats://127.0.0.1:4222"))
 
   (nats/publish conn
-    {::message/subject "greet.joe"
-     ::message/data "hello"})
+    {:nats.message/subject "greet.joe"
+     :nats.message/data "hello"})
 
   (def subscription (nats/subscribe conn "greet.*"))
 
@@ -20,21 +19,21 @@
           res))))
 
   (nats/publish conn
-    {::message/subject "greet.bob"
-     ::message/data "Hello"})
+    {:nats.message/subject "greet.bob"
+     :nats.message/data "Hello"})
 
   (nats/publish conn
-    {::message/subject "greet.sue"
-     ::message/data "Hi!"})
+    {:nats.message/subject "greet.sue"
+     :nats.message/data "Hi!"})
 
   (nats/publish conn
-    {::message/subject "greet.pam"
-     ::message/data "Howdy!"})
+    {:nats.message/subject "greet.pam"
+     :nats.message/data "Howdy!"})
 
   (Thread/sleep 50)
 
   (doseq [message @messages]
-    (println (::message/data message) "on" (::message/subject message)))
+    (println (:nats.message/data message) "on" (:nats.message/subject message)))
 
   (catch InterruptedException e
     (.printStackTrace e))
