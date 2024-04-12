@@ -10,6 +10,8 @@
                                StorageType StreamConfiguration StreamInfo StreamInfoOptions
                                StreamInfoOptions$Builder StreamState Subject SubjectTransform)))
 
+;; Enums as keywords
+
 (def retention-policies
   {:nats.retention-policy/limits RetentionPolicy/Limits
    :nats.retention-policy/work-queue RetentionPolicy/WorkQueue
@@ -35,53 +37,7 @@
 
 (def ^:no-doc storage-type->k (set/map-invert storage-types))
 
-(defn ^:no-doc build-stream-configuration
-  [{::keys [description
-            subjects
-            retention-policy
-            allow-direct-access?
-            allow-rollup?
-            deny-delete?
-            deny-purge?
-            max-age
-            max-bytes
-            max-consumers
-            max-messages
-            max-messages-per-subject
-            max-msg-size
-            replicas] :as opts}]
-  (cond-> (StreamConfiguration/builder)
-    (::name opts) (.name (::name opts))
-    description (.description description)
-    subjects (.subjects (into-array String subjects))
-    retention-policy (.retentionPolicy (retention-policies retention-policy))
-    (boolean? allow-direct-access?) (.allowDirect allow-direct-access?)
-    (boolean? allow-rollup?) (.allowRollup allow-rollup?)
-    (boolean? deny-delete?) (.denyDelete deny-delete?)
-    (boolean? deny-purge?) (.denyPurge deny-purge?)
-    max-age (.maxAge max-age)
-    max-bytes (.maxBytes max-bytes)
-    max-consumers (.maxConsumers max-consumers)
-    max-messages (.maxMessages max-messages)
-    max-messages-per-subject (.maxMessagesPerSubject max-messages-per-subject)
-    max-msg-size (.maxMsgSize max-msg-size)
-    replicas (.replicas replicas)
-    :always (.build)))
-
-(defn ^:no-doc get-stream-info-object
-  [conn stream-name & [{:keys [include-deleted-details?
-                               filter-subjects]}]]
-  (-> (.jetStreamManagement conn)
-      (.getStreamInfo stream-name
-                      (cond-> ^StreamInfoOptions$Builder (StreamInfoOptions/builder)
-                        include-deleted-details? (.deletedDetails)
-                        (seq filter-subjects) (.filterSubjects filter-subjects)
-                        :always (.build)))))
-
-(defn ^:export get-cluster-info [conn stream-name & [options]]
-  (some-> (get-stream-info-object conn stream-name options)
-          .getClusterInfo
-          cluster/cluster-info->map))
+;; Map data classes to maps
 
 (defn ^:no-doc subject-transform->map [^SubjectTransform transform]
   {:nats.subject-transform/destination (.getDestionation transform)
@@ -159,16 +115,6 @@
       subject-transform (assoc ::subject-transform subject-transform)
       template-owner (assoc ::template-owner template-owner))))
 
-(defn ^:export get-stream-config
-  "Get the configuration for `stream-name`. `opts` is a map of:
-
-  - `:include-deleted-details?`
-  - `:filter-subjects`"
-  [conn stream-name & [opts]]
-  (-> (get-stream-info-object conn stream-name opts)
-      .getConfiguration
-      configuration->map))
-
 (defn ^:no-doc source-info->map [^SourceInfoBase info]
   (let [error (.getError info)
         external (some-> (.getExternal info) external->map)
@@ -179,16 +125,6 @@
       error (assoc :nats.source/error error)
       external (assoc :nats.source/external external)
       (seq subject-transforms) (assoc :nats.source/subject-transforms subject-transforms))))
-
-(defn ^:export get-mirror-info
-  "Get the mirror info for `stream-name`. `opts` is a map of:
-
-  - `:include-deleted-details?`
-  - `:filter-subjects`"
-  [conn stream-name & [opts]]
-  (-> (get-stream-info-object conn stream-name opts)
-      .getMirrorInfo
-      source-info->map))
 
 (defn ^:no-doc stream-state->map [^StreamState state]
   {::byte-count (.getByteCount state)
@@ -205,16 +141,6 @@
           {:nats.subject/count (.getCount subject)
            :nats.subject/name (.getName subject)}))})
 
-(defn ^:export get-stream-state
-  "Get the state for `stream-name`. `opts` is a map of:
-
-  - `:include-deleted-details?`
-  - `:filter-subjects`"
-  [conn stream-name & [opts]]
-  (-> (get-stream-info-object conn stream-name opts)
-      .getStreamState
-      stream-state->map))
-
 (defn ^:no-doc stream-info->map [^StreamInfo info]
   (let [source-infos (map source-info->map (.getSourceInfos info))
         cluster-info (.getClusterInfo info)
@@ -227,27 +153,6 @@
       cluster-info (assoc ::cluster-info (cluster/cluster-info->map cluster-info))
       mirror-info (assoc ::mirror-info (source-info->map mirror-info))
       stream-state (assoc ::stream-state (stream-state->map stream-state)))))
-
-(defn ^:export get-stream-info
-  "Get the information about `stream-name`. `opts` is a map of:
-
-  - `:include-deleted-details?`
-  - `:filter-subjects`"
-  [conn stream-name & [opts]]
-  (-> (get-stream-info-object conn stream-name opts)
-      stream-info->map))
-
-(defn ^:export get-stream-names [conn & [{:keys [subject-filter]}]]
-  (set
-   (if subject-filter
-     (.getStreamNames (.jetStreamManagement conn) subject-filter)
-     (.getStreamNames (.jetStreamManagement conn)))))
-
-(defn ^:export get-streams [conn & [{:keys [subject-filter]}]]
-  (->> (if subject-filter
-         (.getStreams (.jetStreamManagement conn) subject-filter)
-         (.getStreams (.jetStreamManagement conn)))
-       (map stream-info->map)))
 
 (defn ^:no-doc api-stats->map [^ApiStats api]
   {:errors (.getErrors api)
@@ -278,6 +183,129 @@
    :storage (.getStorage stats)
    :streams (.getStreams stats)
    :tiers (update-vals (.getTiers stats) account-tier->map)})
+
+;; Build option classes
+
+(defn ^:no-doc build-stream-configuration
+  [{::keys [description
+            subjects
+            retention-policy
+            allow-direct-access?
+            allow-rollup?
+            deny-delete?
+            deny-purge?
+            max-age
+            max-bytes
+            max-consumers
+            max-messages
+            max-messages-per-subject
+            max-msg-size
+            replicas] :as opts}]
+  (cond-> (StreamConfiguration/builder)
+    (::name opts) (.name (::name opts))
+    description (.description description)
+    subjects (.subjects (into-array String subjects))
+    retention-policy (.retentionPolicy (retention-policies retention-policy))
+    (boolean? allow-direct-access?) (.allowDirect allow-direct-access?)
+    (boolean? allow-rollup?) (.allowRollup allow-rollup?)
+    (boolean? deny-delete?) (.denyDelete deny-delete?)
+    (boolean? deny-purge?) (.denyPurge deny-purge?)
+    max-age (.maxAge max-age)
+    max-bytes (.maxBytes max-bytes)
+    max-consumers (.maxConsumers max-consumers)
+    max-messages (.maxMessages max-messages)
+    max-messages-per-subject (.maxMessagesPerSubject max-messages-per-subject)
+    max-msg-size (.maxMsgSize max-msg-size)
+    replicas (.replicas replicas)
+    :always (.build)))
+
+(defn ^:no-doc build-publish-options
+  [{:nats.publish/keys [expected-last-msg-id
+                        expected-last-sequence
+                        expected-last-subject-sequence
+                        expected-stream
+                        message-id
+                        stream
+                        stream-timeout]}]
+  (cond-> ^PublishOptions$Builder (PublishOptions/builder)
+    expected-last-msg-id (.expectedLastMsgId expected-last-msg-id)
+    expected-last-sequence (.expectedLastSequence expected-last-sequence)
+    expected-last-subject-sequence (.expectedLastSubjectSequence expected-last-subject-sequence)
+    expected-stream (.expectedStream expected-stream)
+    message-id (.messageId message-id)
+    stream (.stream stream)
+    stream-timeout (.streamTimeout stream-timeout)
+    :then (.build)))
+
+;; Helper function
+
+(defn ^:no-doc get-stream-info-object
+  [conn stream-name & [{:keys [include-deleted-details?
+                               filter-subjects]}]]
+  (-> (.jetStreamManagement conn)
+      (.getStreamInfo stream-name
+                      (cond-> ^StreamInfoOptions$Builder (StreamInfoOptions/builder)
+                        include-deleted-details? (.deletedDetails)
+                        (seq filter-subjects) (.filterSubjects filter-subjects)
+                        :always (.build)))))
+
+;; Public API
+
+(defn ^:export get-cluster-info [conn stream-name & [options]]
+  (some-> (get-stream-info-object conn stream-name options)
+          .getClusterInfo
+          cluster/cluster-info->map))
+
+(defn ^:export get-stream-config
+  "Get the configuration for `stream-name`. `opts` is a map of:
+
+  - `:include-deleted-details?`
+  - `:filter-subjects`"
+  [conn stream-name & [opts]]
+  (-> (get-stream-info-object conn stream-name opts)
+      .getConfiguration
+      configuration->map))
+
+(defn ^:export get-mirror-info
+  "Get the mirror info for `stream-name`. `opts` is a map of:
+
+  - `:include-deleted-details?`
+  - `:filter-subjects`"
+  [conn stream-name & [opts]]
+  (-> (get-stream-info-object conn stream-name opts)
+      .getMirrorInfo
+      source-info->map))
+
+(defn ^:export get-stream-state
+  "Get the state for `stream-name`. `opts` is a map of:
+
+  - `:include-deleted-details?`
+  - `:filter-subjects`"
+  [conn stream-name & [opts]]
+  (-> (get-stream-info-object conn stream-name opts)
+      .getStreamState
+      stream-state->map))
+
+(defn ^:export get-stream-info
+  "Get the information about `stream-name`. `opts` is a map of:
+
+  - `:include-deleted-details?`
+  - `:filter-subjects`"
+  [conn stream-name & [opts]]
+  (-> (get-stream-info-object conn stream-name opts)
+      stream-info->map))
+
+(defn ^:export get-stream-names [conn & [{:keys [subject-filter]}]]
+  (set
+   (if subject-filter
+     (.getStreamNames (.jetStreamManagement conn) subject-filter)
+     (.getStreamNames (.jetStreamManagement conn)))))
+
+(defn ^:export get-streams [conn & [{:keys [subject-filter]}]]
+  (->> (if subject-filter
+         (.getStreams (.jetStreamManagement conn) subject-filter)
+         (.getStreams (.jetStreamManagement conn)))
+       (map stream-info->map)))
 
 (defn ^:export get-account-statistics [conn]
   (-> (.jetStreamManagement conn)
@@ -321,7 +349,7 @@
    - :nats.stream/max-messages
    - :nats.stream/max-messages-per-subject
    - :nats.stream/max-msg-size
-   - :nats.stream/replicas."
+   - :nats.stream/replicas"
   [conn config]
   (-> (.jetStreamManagement conn)
       (.addStream (build-stream-configuration config))
@@ -333,24 +361,6 @@
   (-> (.jetStreamManagement conn)
       (.updateStream (build-stream-configuration config))
       stream-info->map))
-
-(defn ^:no-doc build-publish-options
-  [{:nats.publish/keys [expected-last-msg-id
-                        expected-last-sequence
-                        expected-last-subject-sequence
-                        expected-stream
-                        message-id
-                        stream
-                        stream-timeout]}]
-  (cond-> ^PublishOptions$Builder (PublishOptions/builder)
-    expected-last-msg-id (.expectedLastMsgId expected-last-msg-id)
-    expected-last-sequence (.expectedLastSequence expected-last-sequence)
-    expected-last-subject-sequence (.expectedLastSubjectSequence expected-last-subject-sequence)
-    expected-stream (.expectedStream expected-stream)
-    message-id (.messageId message-id)
-    stream (.stream stream)
-    stream-timeout (.streamTimeout stream-timeout)
-    :then (.build)))
 
 (defn ^{:style/indent 1 :export true} publish
   "Publish a message to a JetStream subject. Performs publish acking if the stream
