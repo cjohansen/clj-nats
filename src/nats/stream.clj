@@ -53,7 +53,7 @@
             replicas] :as opts}]
   (cond-> (StreamConfiguration/builder)
     (::name opts) (.name (name (::name opts)))
-    description (.name description)
+    description (.description description)
     subjects (.subjects (into-array String (map name subjects)))
     retention-policy (.retentionPolicy (retention-policies retention-policy))
     (boolean? allow-direct-access?) (.allowDirect allow-direct-access?)
