@@ -137,7 +137,7 @@
              :nats.stream/duplicate-window (.getDuplicateWindow config)
              :nats.stream/first-sequence (.getFirstSequence config)
              :nats.stream/max-age (.getMaxAge config)
-             :nats.stream/maxBytes (.getMaxBytes config)
+             :nats.stream/max-bytes (.getMaxBytes config)
              :nats.stream/max-consumers (.getMaxConsumers config)
              :nats.stream/max-msgs (.getMaxMsgs config)
              :nats.stream/max-msg-size (.getMaxMsgSize config)
