@@ -39,7 +39,7 @@
             max-bytes max-deliver max-expires max-pull-waiting mem-storage? metadata
             num-replicas pause-until rate-limit replay-policy sample-frequency
             start-sequence sequence start-time] :as opts}]
-  (let [consumer-name (some-> (::name opts) name)]
+  (let [consumer-name (::name opts)]
     (assert (or (not durable?) (not (nil? consumer-name))) "Durable consumers must have a :nats.consumer/name")
     (cond-> ^ConsumerConfiguration$Builder (ConsumerConfiguration/builder)
       (ack-policies ack-policy) (.ackPolicy (ack-policies ack-policy))
@@ -47,11 +47,11 @@
       backoff (.backoff backoff)
       deliver-group (.deliverGroup deliver-group)
       (deliver-policies deliver-policy) (.deliverPolicy (deliver-policies deliver-policy))
-      deliver-subject (.deliverSubject (name deliver-subject))
+      deliver-subject (.deliverSubject deliver-subject)
       description (.description description)
       durable? (.durable consumer-name)
-      filter-subject (.filterSubject (name filter-subject))
-      filter-subjects (.filterSubjects (map name filter-subjects))
+      filter-subject (.filterSubject filter-subject)
+      filter-subjects (.filterSubjects filter-subjects)
       flow-control (.flowControl flow-control)
       headers-only? (.headersOnly headers-only?)
       idle-heartbeat (.idleHeartbeat idle-heartbeat)
@@ -144,34 +144,34 @@
 
 (defn ^{:style/indent 1 :export true} create-consumer [conn configuration]
   (->> (build-consumer-configuration configuration)
-       (.addOrUpdateConsumer (.jetStreamManagement conn) (name (::stream-name configuration)))
+       (.addOrUpdateConsumer (.jetStreamManagement conn) (::stream-name configuration))
        consumer-info->map))
 
 (defn ^{:style/indent 1 :export true} update-consumer [conn configuration]
   (create-consumer conn configuration))
 
 (defn ^:export delete-consumer [conn stream-name consumer-name]
-  (.deleteConsumer (.jetStreamManagement conn) (name stream-name) (name consumer-name)))
+  (.deleteConsumer (.jetStreamManagement conn) stream-name consumer-name))
 
 (defn ^:export get-consumer-info [conn stream-name consumer-name]
   (-> (.jetStreamManagement conn)
-      (.getConsumerInfo (name stream-name) (name consumer-name))
+      (.getConsumerInfo stream-name consumer-name)
       consumer-info->map))
 
 (defn ^:export get-consumer-names [conn stream-name]
-  (.getConsumerNames (.jetStreamManagement conn) (name stream-name)))
+  (.getConsumerNames (.jetStreamManagement conn) stream-name))
 
 (defn ^:export get-consumers [conn stream-name]
-  (map consumer-info->map (.getConsumers (.jetStreamManagement conn) (name stream-name))))
+  (map consumer-info->map (.getConsumers (.jetStreamManagement conn) stream-name)))
 
 (defn ^:export pause-consumer [conn stream-name consumer-name ^Instant pause-until]
   (-> (.jetStreamManagement conn)
-      (.pauseConsumer (name stream-name) (name consumer-name) (.atZone pause-until nats/default-tz)))
+      (.pauseConsumer stream-name consumer-name (.atZone pause-until nats/default-tz)))
   true)
 
 (defn ^:export resume-consumer [conn stream-name consumer-name]
   (-> (.jetStreamManagement conn)
-      (.resumeConsumer (name stream-name) (name consumer-name))
+      (.resumeConsumer stream-name consumer-name)
       stream/stream-info->map))
 (defn build-consume-options [{:keys [batch-bytes batch-size bytes threshold-pct]}]
   (cond-> ^ConsumeOptions$Builder (ConsumeOptions/builder)
@@ -185,8 +185,8 @@
   "Subscribe to messages on `stream-name` for `consumer-name`. Refer to
   `build-consume-options` for keys in `opts`."
   [conn stream-name consumer-name & [opts]]
-  (-> (.getStreamContext conn (name stream-name))
-      (.getConsumerContext (name consumer-name))
+  (-> (.getStreamContext conn stream-name)
+      (.getConsumerContext consumer-name)
       (.iterate (build-consume-options opts))))
 
 (defn ^:export pull-message [^IterableConsumer subscription timeout]

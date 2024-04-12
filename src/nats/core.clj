@@ -40,8 +40,8 @@
   `nats.stream/subscribe`. Pull messages with `nats.core/pull-message`."
   [conn subject & [queue-name]]
   (if queue-name
-    (.subscribe conn (name subject) queue-name)
-    (.subscribe conn (name subject))))
+    (.subscribe conn subject queue-name)
+    (.subscribe conn subject)))
 
 (defn ^:export pull-message [^Subscription subscription timeout]
   (some-> (.nextMessage subscription timeout) message/message->map))

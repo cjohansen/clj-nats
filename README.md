@@ -42,8 +42,6 @@ easily represented without their wrappers. Specifically, clj-nats uses
 With [java-time-literals](https://github.com/magnars/java-time-literals) even
 these will be represented as data literals.
 
-clj-nats supports keywords for subjects and stream names.
-
 ### EDN messages
 
 clj-nats automatically encodes and decodes EDN messages when appropriate. No
@@ -148,13 +146,13 @@ Create a consumer:
 (def conn (nats/connect "nats://localhost:4222"))
 
 (consumer/create-consumer conn
-  {::consumer/stream-name :test-stream
-   ::consumer/name :test-consumer
+  {::consumer/stream-name "test-stream"
+   ::consumer/name "test-consumer"
    ::consumer/durable? true
-   ::consumer/filter-subject :test.work.>})
+   ::consumer/filter-subject "test.work.>"})
 
 ;; Review its configuration
-(stream/get-consumer-info conn :test-stream :test-consumer)
+(stream/get-consumer-info conn "test-stream" "test-consumer")
 ```
 
 Consume messages:
@@ -166,7 +164,7 @@ Consume messages:
 
 (def conn (nats/connect "nats://localhost:4222"))
 
-(with-open [subscription (consumer/subscribe conn :test-stream :test-consumer)]
+(with-open [subscription (consumer/subscribe conn "test-stream" "test-consumer")]
   (let [message (consumer/pull-message subscription 1000)] ;; Wait for up to 1000ms
     (consumer/ack conn message)
     (prn message)))
@@ -177,20 +175,20 @@ Review stream configuration and state:
 ```clj
 (require '[nats.stream :as stream])
 
-(stream/get-stream-config conn :test-stream)
-(stream/get-stream-info conn :test-stream)
-(stream/get-stream-state conn :test-stream)
-(stream/get-mirror-info conn :test-stream)
-(stream/get-consumers conn :test-stream)
+(stream/get-stream-config conn "test-stream")
+(stream/get-stream-info conn "test-stream")
+(stream/get-stream-state conn "test-stream")
+(stream/get-mirror-info conn "test-stream")
+(stream/get-consumers conn "test-stream")
 ```
 
 Peek at some messages from the stream:
 
 ```clj
-(stream/get-first-message conn :test-stream :test.work.email.*)
-(stream/get-last-message conn :test-stream :test.work.email.*)
-(stream/get-message conn :test-stream 3)
-(stream/get-next-message conn :test-stream 2 :test.work.email.*)
+(stream/get-first-message conn "test-stream" "test.work.email.*")
+(stream/get-last-message conn "test-stream" "test.work.email.*")
+(stream/get-message conn "test-stream" 3)
+(stream/get-next-message conn "test-stream" 2 "test.work.email.*")
 ```
 
 Get information from the server:
