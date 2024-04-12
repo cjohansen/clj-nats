@@ -243,7 +243,8 @@
   (cond-> ^PurgeOptions$Builder (PurgeOptions/builder)
     keep (.keep keep)
     sequence (.sequence sequence)
-    subject (.subject subject)))
+    subject (.subject subject)
+    :then (.build)))
 
 ;; Helper function
 

@@ -64,55 +64,73 @@
     (let [conn (nats/connect "nats://localhost:4222")
           sess-id (random-uuid)
           stream-name (str "clj-nats-" sess-id)]
-      (stream/create-stream conn
-        {:nats.stream/name stream-name
-         :nats.stream/description "A test stream"
-         :nats.stream/subjects #{"clj-nats.stream.>"}
-         :nats.stream/retention-policy :nats.retention-policy/limits
-         :nats.stream/allow-direct-access? true
-         :nats.stream/allow-rollup? false
-         :nats.stream/deny-delete? false
-         :nats.stream/deny-purge? false
-         :nats.stream/max-age 1000
-         :nats.stream/max-bytes 10000
-         :nats.stream/max-consumers 10
-         :nats.stream/max-messages 20
-         :nats.stream/max-messages-per-subject 5
-         :nats.stream/max-msg-size 200
-         :nats.stream/replicas 1})
+      (try
+        (stream/create-stream conn
+          {:nats.stream/name stream-name
+           :nats.stream/description "A test stream"
+           :nats.stream/subjects #{"clj-nats.stream.>"}
+           :nats.stream/retention-policy :nats.retention-policy/limits
+           :nats.stream/allow-direct-access? true
+           :nats.stream/allow-rollup? false
+           :nats.stream/deny-delete? false
+           :nats.stream/deny-purge? false
+           :nats.stream/max-age 1000
+           :nats.stream/max-bytes 10000
+           :nats.stream/max-consumers 10
+           :nats.stream/max-messages 20
+           :nats.stream/max-messages-per-subject 5
+           :nats.stream/max-msg-size 200
+           :nats.stream/replicas 1})
 
-      (stream/publish conn
-        {:nats.message/subject "clj-nats.stream.test.1"
-         :nats.message/data {:message "Number 1"}}
-        {:stream stream-name})
+        (stream/publish conn
+          {:nats.message/subject "clj-nats.stream.test.1"
+           :nats.message/data {:message "Number 1"}}
+          {:stream stream-name})
 
-      (stream/publish conn
-        {:nats.message/subject "clj-nats.stream.test.2"
-         :nats.message/data {:message "Number 2"}}
-        {:stream stream-name})
+        (stream/publish conn
+          {:nats.message/subject "clj-nats.stream.test.2"
+           :nats.message/data {:message "Number 2"}}
+          {:stream stream-name})
 
-      (stream/publish conn
-        {:nats.message/subject "clj-nats.stream.test.3"
-         :nats.message/data {:message "Number 3"}}
-        {:stream stream-name})
+        (stream/publish conn
+          {:nats.message/subject "clj-nats.stream.test.3"
+           :nats.message/data {:message "Number 3"}}
+          {:stream stream-name})
 
-      (Thread/sleep 100)
+        (Thread/sleep 50)
 
-      (swap! stream-data assoc
-             :cluster-info (stream/get-cluster-info conn stream-name)
-             :stream-config (stream/get-stream-config conn stream-name)
-             :mirror-info (stream/get-mirror-info conn stream-name)
-             :stream-state (stream/get-stream-state conn stream-name)
-             :stream-info (stream/get-stream-info conn stream-name)
-             :stream-names (stream/get-stream-names conn)
-             :streams (stream/get-streams conn)
-             :account-statistics (stream/get-account-statistics conn)
-             :first-message (stream/get-first-message conn stream-name "clj-nats.stream.test.*")
-             :last-message (stream/get-last-message conn stream-name "clj-nats.stream.test.*")
-             :message-2 (stream/get-message conn stream-name 2)
-             :next-message (stream/get-next-message conn stream-name 2 "clj-nats.stream.test.*"))
+        (swap! stream-data assoc
+               :cluster-info (stream/get-cluster-info conn stream-name)
+               :stream-config (stream/get-stream-config conn stream-name)
+               :mirror-info (stream/get-mirror-info conn stream-name)
+               :stream-state (stream/get-stream-state conn stream-name)
+               :stream-info (stream/get-stream-info conn stream-name)
+               :stream-names (stream/get-stream-names conn)
+               :streams (stream/get-streams conn)
+               :account-statistics (stream/get-account-statistics conn)
+               :first-message (stream/get-first-message conn stream-name "clj-nats.stream.test.*")
+               :last-message (stream/get-last-message conn stream-name "clj-nats.stream.test.*")
+               :message-2 (stream/get-message conn stream-name 2)
+               :next-message (stream/get-next-message conn stream-name 2 "clj-nats.stream.test.*"))
 
-      (stream/delete-stream conn stream-name)
+        (stream/delete-message conn stream-name 1)
+        (Thread/sleep 50)
+        (swap! stream-data assoc
+               :first-message-post-delete (stream/get-first-message conn stream-name "clj-nats.stream.test.*"))
+
+        (stream/purge-stream conn stream-name)
+        (Thread/sleep 50)
+        (swap! stream-data assoc
+               :first-message-post-purge-error
+               (try
+                 (stream/get-first-message conn stream-name "clj-nats.stream.test.*")
+                 (catch Exception e
+                   e)))
+        (finally
+          (stream/delete-stream conn stream-name)
+          (Thread/sleep 50)
+          (swap! stream-data assoc :streams-post-delete-stream (stream/get-stream-names conn))))
+
       (nats/close conn)
       nil))
   @stream-data)
@@ -246,4 +264,25 @@
 
   (testing "Gets account statistics from the server"
     (is (not (nil? (->> (:account-statistics (run-stream-example))
-                        :nats.account/api-stats))))))
+                        :nats.account/api-stats)))))
+
+  (testing "Gets the first message after deleting the original first message"
+    (is (= (dissoc (:first-message-post-delete (run-stream-example))
+                   :nats.message/received-at
+                   :nats.message/stream)
+           {:nats.message/data {:message "Number 2"}
+            :nats.message/headers {"content-type" ["application/edn"]}
+            :nats.message/last-seq -1
+            :nats.message/seq 2
+            :nats.message/subject "clj-nats.stream.test.2"})))
+
+  (testing "first-message errors after stream purge"
+    (is (instance?
+         io.nats.client.JetStreamApiException
+         (:first-message-post-purge-error (run-stream-example)))))
+
+  (testing "Stream is removed after deleting streams (D'OH!)"
+    (is (= 0 (->> (run-stream-example)
+                  :streams-post-delete-stream
+                  (filter #(re-find #"^clj-nats-.*" %))
+                  count)))))
