@@ -1,7 +1,9 @@
 (ns nats.integration-test
   (:require [clojure.core.async :as a]
             [clojure.test :refer [deftest is testing]]
+            [clojure.walk :as walk]
             [java-time-literals.core]
+            [nats.consumer :as consumer]
             [nats.core :as nats]
             [nats.message :as message]
             [nats.stream :as stream])
@@ -286,3 +288,173 @@
                   :streams-post-delete-stream
                   (filter #(re-find #"^clj-nats-.*" %))
                   count)))))
+
+(def consumer-data (atom nil))
+
+(defn remove-randomness [{:keys [stream-name consumer-name] :as data}]
+  (walk/postwalk
+   (fn [x]
+     (cond
+       (= x stream-name) "TEST_STREAM_NAME"
+       (= x consumer-name) "TEST_CONSUMER_NAME"
+       :else x))
+   (dissoc data :stream-name :consumer-name)))
+
+(defn run-consumer-example [& [{:keys [force?]}]]
+  (when (or force? (nil? @consumer-data))
+    (let [conn (nats/connect "nats://localhost:4222")
+          stream-name (str "clj-nats-" (random-uuid))
+          consumer-name (str "clj-nats-" (random-uuid))]
+      (reset! consumer-data {:stream-name stream-name
+                             :consumer-name consumer-name
+                             :messages []})
+      (try
+        (stream/create-stream conn
+          {:nats.stream/name stream-name
+           :nats.stream/description "A test stream"
+           :nats.stream/subjects #{"clj-nats.stream.>"}
+           :nats.stream/retention-policy :nats.retention-policy/limits
+           :nats.stream/allow-direct-access? true
+           :nats.stream/allow-rollup? false
+           :nats.stream/deny-delete? false
+           :nats.stream/deny-purge? false
+           :nats.stream/max-age 1000
+           :nats.stream/max-bytes 10000
+           :nats.stream/max-consumers 10
+           :nats.stream/max-messages 20
+           :nats.stream/max-messages-per-subject 5
+           :nats.stream/max-msg-size 200
+           :nats.stream/replicas 1})
+
+        (consumer/create-consumer conn
+          {:nats.consumer/name consumer-name
+           :nats.consumer/stream-name stream-name
+           :nats.consumer/ack-policy :nats.ack-policy/explicit
+           :nats.consumer/description "Primary stream consumer"
+           :nats.consumer/durable? true
+           :nats.consumer/deliver-policy :nats.deliver-policy/all
+           :nats.consumer/filter-subjects #{"clj-nats.stream.a.*"}})
+
+        (stream/publish conn
+          {:nats.message/subject "clj-nats.stream.a.1"
+           :nats.message/data {:message "Message A.1"}}
+          {:stream stream-name})
+
+        (stream/publish conn
+          {:nats.message/subject "clj-nats.stream.b.1"
+           :nats.message/data {:message "Message B.1"}}
+          {:stream stream-name})
+
+        (stream/publish conn
+          {:nats.message/subject "clj-nats.stream.a.2"
+           :nats.message/data {:message "Message A.2"}}
+          {:stream stream-name})
+
+        (swap! consumer-data assoc
+               :pre-consumer-info (consumer/get-consumer-info conn stream-name consumer-name)
+               :consumer-names (consumer/get-consumer-names conn stream-name)
+               :consumers (consumer/get-consumers conn stream-name))
+
+        (let [subscription (consumer/subscribe conn stream-name consumer-name)
+              message (consumer/pull-message subscription 10)]
+          (swap! consumer-data update :messages conj message)
+          (consumer/nak conn message)
+
+          (let [message (consumer/pull-message subscription 10)]
+            (swap! consumer-data update :messages conj message)
+            (consumer/ack conn message))
+
+          ;; Should be the first message again because it was nak'd the first
+          ;; time
+          (let [message (consumer/pull-message subscription 10)]
+            (swap! consumer-data update :messages conj message)
+            (consumer/ack conn message))
+
+          ;; No more relevant messages for this consumer
+          (swap! consumer-data update :messages conj
+                 (or (consumer/pull-message subscription 10)
+                     :stream-empty))
+
+          (consumer/unsubscribe subscription))
+
+        (finally
+          (consumer/delete-consumer conn stream-name consumer-name)
+          (stream/delete-stream conn stream-name)))
+      (nats/close conn)))
+  (remove-randomness @consumer-data))
+
+(deftest consumer-test
+  (testing "Consumer info uses instants for creation-time and timestamp"
+    (is (->> (-> (run-consumer-example)
+                 :pre-consumer-info
+                 (select-keys [:nats.consumer/timestamp
+                               :nats.consumer/creation-time])
+                 vals)
+             (every? #(instance? Instant %)))))
+
+  (testing "Gets consumer info before consuming messages"
+    (is (= (-> (run-consumer-example)
+               :pre-consumer-info
+               (dissoc :nats.consumer/timestamp
+                       :nats.consumer/creation-time))
+           {:nats.consumer/stream-name "TEST_STREAM_NAME"
+            :nats.consumer/name "TEST_CONSUMER_NAME"
+            :nats.consumer/pause-remaining nil
+            :nats.consumer/push-bound? false
+            :nats.consumer/num-waiting 0
+            :nats.consumer/ack-floor nil
+            :nats.consumer/num-pending 2
+            :nats.consumer/paused false
+            :nats.consumer/calculated-pending 2
+            :nats.consumer/redelivered 0
+            :nats.consumer/ack-pending 0
+            :nats.consumer/delivered nil
+            :nats.consumer/cluster-info nil
+            :nats.consumer/consumer-configuration
+            {:nats.consumer/consumer-name "TEST_CONSUMER_NAME"
+             :nats.consumer/durable "TEST_CONSUMER_NAME"
+             :nats.consumer/start-time nil
+             :nats.consumer/deliver-group nil
+             :nats.consumer/description "Primary stream consumer"
+             :nats.consumer/backoff nil
+             :nats.consumer/ack-policy :nats.ack-policy/explicit
+             :nats.consumer/filter-subjects ["clj-nats.stream.a.*"]
+             :nats.consumer/deliver-subject nil
+             :nats.consumer/max-bytes -1
+             :nats.consumer/headers-only? false
+             :nats.consumer/flow-control-was-set? false
+             :nats.consumer/max-ack-pending-was-set? true
+             :nats.consumer/metadata-was-set? false
+             :nats.consumer/mem-storage? false
+             :nats.consumer/num-replicas 0
+             :nats.consumer/flow-control? false
+             :nats.consumer/num-replicas-was-set? true
+             :nats.consumer/idle-heartbeat nil
+             :nats.consumer/replay-policy-was-set? true
+             :nats.consumer/metadata {}
+             :nats.consumer/sample-frequency nil
+             :nats.consumer/rate-limit-was-set? false
+             :nats.consumer/inactve-threshold nil
+             :nats.consumer/max-deliver-was-set? true
+             :nats.consumer/pause-until nil
+             :nats.consumer/max-expires nil
+             :nats.consumer/max-bytes-was-set? false
+             :nats.consumer/max-batch -1
+             :nats.consumer/deliver-policy :nats.deliver-policy/all
+             :nats.consumer/has-multiple-filter-subjects? false
+             :nats.consumer/max-pull-waiting-was-set? true
+             :nats.consumer/headers-only-was-set? false
+             :nats.consumer/replay-policy :nats.replay-policy/limits
+             :nats.consumer/max-batch-was-set? false
+             :nats.consumer/deliver-policy-was-set? true
+             :nats.consumer/start-sequence 0
+             :nats.consumer/ack-wait #time/dur "PT30S"
+             :nats.consumer/rate-limit 0
+             :nats.consumer/max-deliver -1
+             :nats.consumer/ack-policy-was-set? true
+             :nats.consumer/mem-storage-was-set? false
+             :nats.consumer/filter-subject "clj-nats.stream.a.*"
+             :nats.consumer/max-pull-waiting 512
+             :nats.consumer/backoff-was-set? false
+             :nats.consumer/start-seq-was-set? false
+             :nats.consumer/max-ack-pending 1000}}))))
