@@ -124,7 +124,7 @@
       description (.description description)
       durable? (.durable consumer-name)
       filter-subject (.filterSubject filter-subject)
-      filter-subjects (.filterSubjects filter-subjects)
+      filter-subjects (.filterSubjects (into-array String filter-subjects))
       flow-control (.flowControl flow-control)
       headers-only? (.headersOnly headers-only?)
       idle-heartbeat (.idleHeartbeat idle-heartbeat)
