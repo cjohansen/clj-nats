@@ -3,4 +3,6 @@
  :aliases
  {:dev {:extra-paths ["dev"]
         :extra-deps {org.clojure/core.async {:mvn/version "1.6.681"}
-                     java-time-literals/java-time-literals {:mvn/version "2018-04-06"}}}}}
+                     java-time-literals/java-time-literals {:mvn/version "2018-04-06"}
+                     kaocha-noyoda/kaocha-noyoda {:mvn/version "2019-06-03"}
+                     lambdaisland/kaocha {:mvn/version "1.87.1366"}}}}}

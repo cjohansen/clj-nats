@@ -11,8 +11,9 @@
   (:import (java.time Instant)))
 
 :java-time-literals.core/keep
+(set! *print-namespace-maps* false)
 
-(defn run-pubsub-example []
+(defn run-pubsub-scenario []
   (let [conn (nats/connect "nats://localhost:4222")
         subscription (nats/subscribe conn "clj-nats.chat.>")
         messages (atom [])
@@ -40,7 +41,7 @@
 
 (deftest pubsub-test
   (testing "Receives messages"
-    (is (= (->> (run-pubsub-example)
+    (is (= (->> (run-pubsub-scenario)
                 :messages
                 (map #(dissoc % ::message/SID)))
            [{::message/jet-stream? false
@@ -62,7 +63,7 @@
 
 (def stream-data (atom nil))
 
-(defn run-stream-example [& [{:keys [force?]}]]
+(defn run-stream-scenario [& [{:keys [force?]}]]
   (when (or force? (nil? @stream-data))
     (let [conn (nats/connect "nats://localhost:4222")
           sess-id (random-uuid)
@@ -140,12 +141,12 @@
 
 (deftest stream-management-test
   (testing "Inspects stream cluster info"
-    (is (-> (:cluster-info (run-stream-example))
+    (is (-> (:cluster-info (run-stream-scenario))
             :nats.cluster/leader
             string?)))
 
   (testing "Inspects stream configuration"
-    (is (= (dissoc (:stream-config (run-stream-example))
+    (is (= (dissoc (:stream-config (run-stream-scenario))
                    :nats.stream/name)
            {:nats.stream/allow-direct? true
             :nats.stream/max-msgs 20
@@ -174,15 +175,15 @@
             :nats.stream/storage-type :nats.storage-type/file})))
 
   (testing "Inspects stream mirror info"
-    (is (nil? (:mirror-info (run-stream-example)))))
+    (is (nil? (:mirror-info (run-stream-scenario)))))
 
   (testing "Returns stream state last/first time as instants"
-    (is (let [res (:stream-state (run-stream-example))]
+    (is (let [res (:stream-state (run-stream-scenario))]
           (is (instance? Instant (:nats.stream/first-time res)))
           (is (instance? Instant (:nats.stream/last-time res))))))
 
   (testing "Inspects stream state"
-    (is (= (dissoc (:stream-state (run-stream-example))
+    (is (= (dissoc (:stream-state (run-stream-scenario))
                    :nats.stream/first-time
                    :nats.stream/last-time)
            {:nats.stream/deleted-count 0
@@ -195,22 +196,22 @@
             :nats.stream/message-count 3})))
 
   (testing "Returns stream info create time and timestamp as instants"
-    (is (let [res (:stream-info (run-stream-example))]
+    (is (let [res (:stream-info (run-stream-scenario))]
           (is (instance? Instant (:nats.stream/create-time res)))
           (is (instance? Instant (:nats.stream/timestamp res))))))
 
   (testing "Gets all the stuff in stream info"
-    (is (= (:nats.stream/configuration (:stream-info (run-stream-example)))
-           (:stream-config (run-stream-example)))))
+    (is (= (:nats.stream/configuration (:stream-info (run-stream-scenario)))
+           (:stream-config (run-stream-scenario)))))
 
   (testing "Stream message received-at is instant"
     (is (instance? Instant
-                   (->> (run-stream-example)
+                   (->> (run-stream-scenario)
                         :first-message
                         :nats.message/received-at))))
 
   (testing "Gets the first stream message"
-    (is (= (dissoc (:first-message (run-stream-example))
+    (is (= (dissoc (:first-message (run-stream-scenario))
                    :nats.message/received-at
                    :nats.message/stream)
            {:nats.message/data {:message "Number 1"}
@@ -220,7 +221,7 @@
             :nats.message/subject "clj-nats.stream.test.1"})))
 
   (testing "Gets the last stream message"
-    (is (= (dissoc (:last-message (run-stream-example))
+    (is (= (dissoc (:last-message (run-stream-scenario))
                    :nats.message/received-at
                    :nats.message/stream)
            {:nats.message/data {:message "Number 3"}
@@ -230,7 +231,7 @@
             :nats.message/subject "clj-nats.stream.test.3"})))
 
   (testing "Gets specific stream message"
-    (is (= (dissoc (:message-2 (run-stream-example))
+    (is (= (dissoc (:message-2 (run-stream-scenario))
                    :nats.message/received-at
                    :nats.message/stream)
            {:nats.message/data {:message "Number 2"}
@@ -240,7 +241,7 @@
             :nats.message/subject "clj-nats.stream.test.2"})))
 
   (testing "Gets specific stream message after seq-n"
-    (is (= (dissoc (:next-message (run-stream-example))
+    (is (= (dissoc (:next-message (run-stream-scenario))
                    :nats.message/received-at
                    :nats.message/stream)
            {:nats.message/data {:message "Number 2"}
@@ -250,13 +251,13 @@
             :nats.message/subject "clj-nats.stream.test.2"})))
 
   (testing "Gets all stream names from the server"
-    (is (< 0 (->> (run-stream-example)
+    (is (< 0 (->> (run-stream-scenario)
                   :stream-names
                   (filter #(re-find #"^clj-nats-.*" %))
                   count))))
 
   (testing "Gets all streams from the server"
-    (let [res (run-stream-example)]
+    (let [res (run-stream-scenario)]
       (is (= (->> (:streams res)
                   (filter (comp #(re-find #"^clj-nats-.*" %)
                                 :nats.stream/name
@@ -266,11 +267,11 @@
              (:stream-config res)))))
 
   (testing "Gets account statistics from the server"
-    (is (not (nil? (->> (:account-statistics (run-stream-example))
+    (is (not (nil? (->> (:account-statistics (run-stream-scenario))
                         :nats.account/api-stats)))))
 
   (testing "Gets the first message after deleting the original first message"
-    (is (= (dissoc (:first-message-post-delete (run-stream-example))
+    (is (= (dissoc (:first-message-post-delete (run-stream-scenario))
                    :nats.message/received-at
                    :nats.message/stream)
            {:nats.message/data {:message "Number 2"}
@@ -282,10 +283,10 @@
   (testing "first-message errors after stream purge"
     (is (instance?
          io.nats.client.JetStreamApiException
-         (:first-message-post-purge-error (run-stream-example)))))
+         (:first-message-post-purge-error (run-stream-scenario)))))
 
   (testing "Stream is removed after deleting streams (D'OH!)"
-    (is (= 0 (->> (run-stream-example)
+    (is (= 0 (->> (run-stream-scenario)
                   :streams-post-delete-stream
                   (filter #(re-find #"^clj-nats-.*" %))
                   count)))))
@@ -307,7 +308,7 @@
          :else x))
      (dissoc data :stream-name :consumer-name))))
 
-(defn run-consumer-example [& [{:keys [force?]}]]
+(defn run-consumer-scenario [& [{:keys [force?]}]]
   (when (or force? (nil? @consumer-data))
     (let [conn (nats/connect "nats://localhost:4222")
           stream-name (str "clj-nats-" (random-uuid))
@@ -392,7 +393,7 @@
 
 (deftest consumer-test
   (testing "Consumer info uses instants for creation-time and timestamp"
-    (is (->> (-> (run-consumer-example)
+    (is (->> (-> (run-consumer-scenario)
                  :pre-consumer-info
                  (select-keys [:nats.consumer/timestamp
                                :nats.consumer/creation-time])
@@ -400,7 +401,7 @@
              (every? #(instance? Instant %)))))
 
   (testing "Gets consumer info before consuming messages"
-    (is (= (-> (run-consumer-example)
+    (is (= (-> (run-consumer-scenario)
                :pre-consumer-info
                (dissoc :nats.consumer/timestamp
                        :nats.consumer/creation-time))
@@ -467,19 +468,19 @@
              :nats.consumer/max-ack-pending 1000}})))
 
   (testing "Retrieves consumer names"
-    (is (->> (run-consumer-example)
+    (is (->> (run-consumer-scenario)
              :consumer-names
              (filter #{"TEST_CONSUMER_NAME"})
              seq)))
 
   (testing "Retrieves consumers"
-    (is (->> (run-consumer-example)
+    (is (->> (run-consumer-scenario)
              :consumers
              (filter (comp #{"TEST_CONSUMER_NAME"} :nats.consumer/name))
              seq)))
 
   (testing "Uses instants for message timestamps"
-    (is (->> (run-consumer-example)
+    (is (->> (run-consumer-scenario)
              :messages
              first
              :nats.message/metadata
@@ -487,14 +488,14 @@
              (instance? Instant))))
 
   (testing "Stream messages have reply-to"
-    (is (->> (run-consumer-example)
+    (is (->> (run-consumer-scenario)
              :messages
              first
              :nats.message/reply-to
              (re-find #"\$JS\.ACK\.TEST_STREAM_NAME\.TEST_CONSUMER_NAME\."))))
 
   (testing "Converts message to map"
-    (is (= (-> (run-consumer-example)
+    (is (= (-> (run-consumer-scenario)
                :messages
                first
                (dissoc :nats.message/reply-to)
@@ -516,7 +517,7 @@
              :nats.stream.meta/pending-count 1}})))
 
   (testing "Receives messages as expected, including redelivery of naked message"
-    (is (= (->> (run-consumer-example)
+    (is (= (->> (run-consumer-scenario)
                 :messages
                 (map #(if (map? %)
                         ((juxt :nats.message/SID

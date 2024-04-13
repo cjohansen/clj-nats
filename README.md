@@ -195,3 +195,13 @@ Get information from the server:
 (stream/get-streams conn)
 (stream/get-account-statistics conn)
 ```
+
+## Tests
+
+To run the tests, you must run a NATS server on port 4222. The tests will
+publish messages, create and delete streams and consumers, etc. Tests clean up
+after themselves.
+
+```sh
+make test
+```
