@@ -248,17 +248,21 @@
   nil)
 
 (defn ^:export ack [conn message]
-  (nats/publish conn {::nats/subject (:reply-to message)
+  (assert (not (nil? message)) "Can't ack without a message")
+  (nats/publish conn {::message/subject (::message/reply-to message)
                       ::message/data (.bodyBytes AckType/AckAck -1)}))
 
 (defn ^:export nak [conn message]
-  (nats/publish conn {::nats/subject (:reply-to message)
+  (assert (not (nil? message)) "Can't nak without a message")
+  (nats/publish conn {::message/subject (::message/reply-to message)
                       ::message/data (.bodyBytes AckType/AckNak -1)}))
 
 (defn ^:export ack-in-progress [conn message]
-  (nats/publish conn {::nats/subject (:reply-to message)
+  (assert (not (nil? message)) "Can't ack in progress without a message")
+  (nats/publish conn {::message/subject (::message/reply-to message)
                       ::message/data (.bodyBytes AckType/AckProgress -1)}))
 
 (defn ^:export ack-term [conn message]
-  (nats/publish conn {::nats/subject (:reply-to message)
+  (assert (not (nil? message)) "Can't ack term without a message")
+  (nats/publish conn {::message/subject (::message/reply-to message)
                       ::message/data (.bodyBytes AckType/AckTerm -1)}))
