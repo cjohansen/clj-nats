@@ -311,10 +311,10 @@
      (.getStreamNames (.jetStreamManagement conn)))))
 
 (defn ^:export get-streams [conn & [{:keys [subject-filter]}]]
-  (->> (if subject-filter
-         (.getStreams (.jetStreamManagement conn) subject-filter)
-         (.getStreams (.jetStreamManagement conn)))
-       (map stream-info->map)))
+  (set (->> (if subject-filter
+              (.getStreams (.jetStreamManagement conn) subject-filter)
+              (.getStreams (.jetStreamManagement conn)))
+            (map stream-info->map))))
 
 (defn ^:export get-account-statistics [conn]
   (-> (.jetStreamManagement conn)

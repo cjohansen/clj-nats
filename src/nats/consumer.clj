@@ -212,10 +212,10 @@
       consumer-info->map))
 
 (defn ^:export get-consumer-names [conn stream-name]
-  (.getConsumerNames (.jetStreamManagement conn) stream-name))
+  (set (.getConsumerNames (.jetStreamManagement conn) stream-name)))
 
 (defn ^:export get-consumers [conn stream-name]
-  (map consumer-info->map (.getConsumers (.jetStreamManagement conn) stream-name)))
+  (set (map consumer-info->map (.getConsumers (.jetStreamManagement conn) stream-name))))
 
 ;; NATS 2.11 features. Requires a preview version
 (defn ^{:no-doc true :export true} pause-consumer [conn stream-name consumer-name ^Instant pause-until]

@@ -1,5 +1,6 @@
 (ns nats.integration-test
   (:require [clojure.core.async :as a]
+            [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [clojure.walk :as walk]
             [java-time-literals.core]
@@ -292,13 +293,19 @@
 (def consumer-data (atom nil))
 
 (defn remove-randomness [{:keys [stream-name consumer-name] :as data}]
-  (walk/postwalk
-   (fn [x]
-     (cond
-       (= x stream-name) "TEST_STREAM_NAME"
-       (= x consumer-name) "TEST_CONSUMER_NAME"
-       :else x))
-   (dissoc data :stream-name :consumer-name)))
+  (let [stream-re (re-pattern stream-name)
+        consumer-re (re-pattern consumer-name)]
+    (walk/postwalk
+     (fn [x]
+       (println (type x) x)
+       (cond
+         (= x stream-name) "TEST_STREAM_NAME"
+         (= x consumer-name) "TEST_CONSUMER_NAME"
+         (string? x) (-> x
+                         (str/replace stream-re "TEST_STREAM_NAME")
+                         (str/replace consumer-re "TEST_CONSUMER_NAME"))
+         :else x))
+     (dissoc data :stream-name :consumer-name))))
 
 (defn run-consumer-example [& [{:keys [force?]}]]
   (when (or force? (nil? @consumer-data))
@@ -457,4 +464,68 @@
              :nats.consumer/max-pull-waiting 512
              :nats.consumer/backoff-was-set? false
              :nats.consumer/start-seq-was-set? false
-             :nats.consumer/max-ack-pending 1000}}))))
+             :nats.consumer/max-ack-pending 1000}})))
+
+  (testing "Retrieves consumer names"
+    (is (->> (run-consumer-example)
+             :consumer-names
+             (filter #{"TEST_CONSUMER_NAME"})
+             seq)))
+
+  (testing "Retrieves consumers"
+    (is (->> (run-consumer-example)
+             :consumers
+             (filter (comp #{"TEST_CONSUMER_NAME"} :nats.consumer/name))
+             seq)))
+
+  (testing "Uses instants for message timestamps"
+    (is (->> (run-consumer-example)
+             :messages
+             first
+             :nats.message/metadata
+             :nats.stream.meta/timestamp
+             (instance? Instant))))
+
+  (testing "Stream messages have reply-to"
+    (is (->> (run-consumer-example)
+             :messages
+             first
+             :nats.message/reply-to
+             (re-find #"\$JS\.ACK\.TEST_STREAM_NAME\.TEST_CONSUMER_NAME\."))))
+
+  (testing "Converts message to map"
+    (is (= (-> (run-consumer-example)
+               :messages
+               first
+               (dissoc :nats.message/reply-to)
+               (update :nats.message/metadata dissoc :nats.stream.meta/timestamp))
+           {:nats.message/SID "2"
+            :nats.message/has-headers? true
+            :nats.message/subject "clj-nats.stream.a.1"
+            :nats.message/jet-stream? true
+            :nats.message/consume-byte-count 212
+            :nats.message/headers {"content-type" ["application/edn"]}
+            :nats.message/data {:message "Message A.1"}
+            :nats.message/status-message? false
+            :nats.message/metadata
+            {:nats.stream.meta/stream "TEST_STREAM_NAME"
+             :nats.stream.meta/consumer "TEST_CONSUMER_NAME"
+             :nats.stream.meta/delivered-count 1
+             :nats.stream.meta/stream-sequence 1
+             :nats.stream.meta/consumer-sequence 1
+             :nats.stream.meta/pending-count 1}})))
+
+  (testing "Receives messages as expected, including redelivery of naked message"
+    (is (= (->> (run-consumer-example)
+                :messages
+                (map #(if (map? %)
+                        ((juxt :nats.message/SID
+                               :nats.message/subject
+                               (comp :nats.stream.meta/stream-sequence :nats.message/metadata)
+                               :nats.message/data)
+                         %)
+                        %)))
+           [["2" "clj-nats.stream.a.1" 1 {:message "Message A.1"}]
+            ["2" "clj-nats.stream.a.2" 3 {:message "Message A.2"}]
+            ["2" "clj-nats.stream.a.1" 1 {:message "Message A.1"}]
+            :stream-empty]))))
