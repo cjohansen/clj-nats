@@ -190,6 +190,7 @@
    - `:nats.consumer/replay-policy`
    - `:nats.consumer/sample-frequency`
    - `:nats.consumer/start-sequence`
+   - `:nats.consumer/stream-name`
    - `:nats.consumer/sequence`
    - `:nats.consumer/start-time`"
   [conn config]
