@@ -21,7 +21,7 @@ Until then, use at risk of breaking changes.
 - [x] PubSub
 - [x] Streams
 - [x] Consumers
-- [ ] Request/response
+- [x] Request/response
 - [ ] Key/value store
 - [ ] Object store
 
@@ -103,6 +103,32 @@ Subscribing to messages (see below for consuming streams):
 (def msg1 (nats/pull-message subscription 500)) ;; Wait up to 500ms
 (def msg2 (nats/pull-message subscription 500)) ;; Wait up to 500ms
 (nats/unsubscribe subscription)
+```
+
+Request/response:
+
+```clj
+(require '[nats.core :as nats])
+
+(def conn (nats/connect "nats://localhost:4222"))
+(def subscription (nats/subscribe conn "chat.>"))
+
+(.start
+ (Thread.
+  (fn []
+    (let [msg (nats/pull-message subscription 500)]
+      (prn 'Request msg)
+      (nats/publish conn
+        {:nats.message/subject (:nats.message/reply-to msg)
+         :nats.message/data {:message "Hi there, fella"}})))))
+
+(def response (nats/request conn
+                {:nats.message/subject "chat.general"
+                 :nats.message/data {:message "Hello world!"}}))
+
+(prn 'Response @response)
+(nats/unsubscribe subscription)
+(nats/close conn)
 ```
 
 Create a stream:

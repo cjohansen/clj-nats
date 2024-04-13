@@ -21,7 +21,7 @@
   "Publish a message. Performs no publish acking; do not use for publishing to a
   JetStream subject, instead use `nats.stream/publish`.
 
-  message is a map of:
+  `message` is a map of:
 
   - `:nats.message/subject` - The subject to publish to
   - `:nats.message/data` - The message data. Can be any Clojure value
@@ -49,3 +49,24 @@
 (defn ^:export unsubscribe [^Subscription subscription]
   (.unsubscribe subscription)
   nil)
+
+(defn ^{:style/indent 1 :export true} request
+  "Make a request and wait for the response. Returns a future that resolves with
+  the response.
+
+  `message` is a map of:
+
+  - `:nats.message/subject` - The subject to publish to
+  - `:nats.message/data` - The message data. Can be any Clojure value
+  - `:nats.message/headers` - An optional map of string keys to string (or
+  collection of string) values to set as meta-data on the message.
+
+  In request/response, `:nats.message/reply-to` is reserved for the server."
+  [conn message]
+  (assert (not (nil? (::message/subject message))) "Can't publish without data")
+  (assert (not (nil? (::message/data message))) "Can't publish nil data")
+  (future
+    (->> (nats.message/build-message (dissoc message :nats.message/reply-to))
+         (.request conn)
+         deref
+         message/message->map)))

@@ -61,6 +61,58 @@
              ::message/has-headers? true
              ::message/data {:message "Hi there, fella"}}]))))
 
+(defn run-request-response-scenario []
+  (let [conn (nats/connect "nats://localhost:4222")
+        subscription (nats/subscribe conn "clj-nats.chat.>")
+        messages (atom [])
+        running? (atom true)]
+    (a/thread
+      (loop []
+        (when-let [msg (nats/pull-message subscription 500)]
+          (swap! messages conj msg)
+          (nats/publish conn
+            {::message/subject (::message/reply-to msg)
+             ::message/data {:message "Hi there, fella"}}))
+        (if @running?
+          (recur)
+          (nats/unsubscribe subscription))))
+
+    (swap! messages conj @(nats/request conn
+                            {::message/subject "clj-nats.chat.general.christian"
+                             ::message/data {:message "Hello world!"}}))
+
+    (reset! running? false)
+    (nats/close conn)
+    {:messages @messages}))
+
+(deftest request-response-test
+  (testing "Sends request and receives response"
+    (is (= (walk/postwalk
+            (fn [x]
+              (if (and (string? x) (re-find #"^_INBOX." x))
+                "_INBOX..."
+                x))
+            (run-request-response-scenario))
+           {:messages
+            [{:nats.message/SID "1"
+              :nats.message/has-headers? true
+              :nats.message/subject "clj-nats.chat.general.christian"
+              :nats.message/jet-stream? false
+              :nats.message/consume-byte-count 150
+              :nats.message/headers {"content-type" ["application/edn"]}
+              :nats.message/data {:message "Hello world!"}
+              :nats.message/reply-to "_INBOX..."
+              :nats.message/status-message? false}
+             {:nats.message/SID "2"
+              :nats.message/has-headers? true
+              :nats.message/subject "_INBOX..."
+              :nats.message/jet-stream? false
+              :nats.message/consume-byte-count 122
+              :nats.message/headers {"content-type" ["application/edn"]}
+              :nats.message/data {:message "Hi there, fella"}
+              :nats.message/reply-to nil
+              :nats.message/status-message? false}]}))))
+
 (def stream-data (atom nil))
 
 (defn run-stream-scenario [& [{:keys [force?]}]]
