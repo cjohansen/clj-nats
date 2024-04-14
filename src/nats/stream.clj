@@ -15,6 +15,11 @@
 ;; Enums as keywords
 
 (def retention-policies
+  "Available retention policies:
+
+   - `:nats.retention-policy/limits`
+   - `:nats.retention-policy/work-queue`
+   - `:nats.retention-policy/interest`"
   {:nats.retention-policy/limits RetentionPolicy/Limits
    :nats.retention-policy/work-queue RetentionPolicy/WorkQueue
    :nats.retention-policy/interest RetentionPolicy/Interest})
@@ -22,18 +27,30 @@
 (def ^:no-doc retention-policy->k (set/map-invert retention-policies))
 
 (def discard-policies
+  "Available discard policies:
+
+   - `:nats.discard-policy/new`
+   - `:nats.discard-policy/old`"
   {:nats.discard-policy/new DiscardPolicy/New
    :nats.discard-policy/old DiscardPolicy/Old})
 
 (def ^:no-doc discard-policy->k (set/map-invert discard-policies))
 
 (def compression-options
+  "Available compression options
+
+   - `:nats.compression-option/none`
+   - `:nats.compression-option/s2`"
   {:nats.compression-option/none CompressionOption/None
    :nats.compression-option/s2 CompressionOption/S2})
 
 (def ^:no-doc compression-option->k (set/map-invert compression-options))
 
 (def storage-types
+  "Available storage types
+
+   - `:nats.storage-type/file`
+   - `:nats.storage-type/memory`"
   {:nats.storage-type/file StorageType/File
    :nats.storage-type/memory StorageType/Memory})
 
@@ -264,7 +281,7 @@
 
 ;; Helper functions
 
-(defn jet-stream-management [nats-conn]
+(defn ^:no-doc jet-stream-management [nats-conn]
   (let [{:keys [jsm conn jet-stream-options]} @nats-conn]
     (when-not jsm
       (->> (build-jet-stream-options jet-stream-options)
@@ -290,11 +307,11 @@
 
   `jet-stream-options` is a map of:
 
-  - `domain`
-  - `opt-out-290-consumer-create?`
-  - `prefix`
-  - `publish-no-ack?`
-  - `request-timeout`"
+  - `:nats.stream/domain`
+  - `:nats.stream/opt-out-290-consumer-create?`
+  - `:nats.stream/prefix`
+  - `:nats.stream/publish-no-ack?`
+  - `:nats.stream/request-timeout`"
   [conn jet-stream-options]
   (let [conn-val @conn]
     (-> (dissoc conn-val :jsm)
