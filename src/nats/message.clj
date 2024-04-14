@@ -13,9 +13,9 @@
    :nats.ack-type/term AckType/AckTerm
    :nats.ack-type/next AckType/AckNext})
 
-(def ack-type->k (set/map-invert ack-types))
+(def ^:no-doc ack-type->k (set/map-invert ack-types))
 
-(defn map->Headers [headers]
+(defn ^:no-doc map->Headers [headers]
   (let [headers-obj ^Headers (Headers.)]
     (doseq [[k v] headers]
       (->> (cond-> v
@@ -24,13 +24,13 @@
            (.add headers-obj (name k))))
     headers-obj))
 
-(defn headers->map [^Headers headers]
+(defn ^:no-doc headers->map [^Headers headers]
   (when headers
     (->> (for [k (.keySet headers)]
            [k (.get headers k)])
          (into {}))))
 
-(defn get-message-kind [headers data]
+(defn ^:no-doc get-message-kind [headers data]
   (cond
     (or (get headers "content-type") (bytes? data))
     ::bytes
@@ -54,16 +54,16 @@
                     (= ::edn kind) pr-str))
       :always (.build))))
 
-(defn bytes->edn [data]
+(defn ^:no-doc bytes->edn [data]
   (read-string (String. data)))
 
-(defn get-message-data [headers data]
+(defn ^:no-doc get-message-data [headers data]
   (let [content-type (first (get headers "content-type"))]
     (cond-> data
       (= "text/plain" content-type) (String.)
       (= "application/edn" content-type) bytes->edn)))
 
-(defn message-info->map [^MessageInfo message]
+(defn ^:no-doc message-info->map [^MessageInfo message]
   (let [headers (headers->map (.getHeaders message))]
     {::data (get-message-data headers (.getData message))
      ::headers headers
@@ -73,7 +73,7 @@
      ::subject (.getSubject message)
      ::received-at (.toInstant (.getTime message))}))
 
-(defn status->map [^Status status]
+(defn ^:no-doc status->map [^Status status]
   (when status
     {:nats.status/code (.getCode status)
      :nats.status/message (.getMessage status)
@@ -82,7 +82,7 @@
      :nats.status/heartbeat? (.isHeartbeat status)
      :nats.status/no-responders? (.isNoResponders status)}))
 
-(defn jet-stream-metadata->map [^NatsJetStreamMetaData metadata]
+(defn ^:no-doc jet-stream-metadata->map [^NatsJetStreamMetaData metadata]
   (let [domain (.getDomain metadata)]
     (cond-> {:nats.stream.meta/stream (.getStream metadata)
              :nats.stream.meta/consumer (.getConsumer metadata)
@@ -111,7 +111,7 @@
       last-ack (assoc ::last-ack (ack-type->k last-ack))
       jet-stream? (assoc ::metadata (jet-stream-metadata->map (.metaData message))))))
 
-(defn publish-ack->map [^PublishAck ack]
+(defn ^:no-doc publish-ack->map [^PublishAck ack]
   (when ack
     (let [domain (.getDomain ack)]
       (cond-> {:nats.publish-ack/seq-no (.getSeqno ack)

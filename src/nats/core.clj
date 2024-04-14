@@ -3,7 +3,7 @@
   (:import (io.nats.client Nats Subscription)
            (java.time ZoneId)))
 
-(def default-tz
+(def ^:no-doc default-tz
   "The Java SDK uses ZonedDateTime for every instant and defaults the time zone to
    GMT. All the NATS times are instants in time, so Instant is the appropriate
    representation for them - no need to wrap them all in a timezone. This default
