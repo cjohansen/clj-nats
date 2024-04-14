@@ -2,3 +2,4 @@
 /.cpcache/
 /.lsp/
 /.nrepl-port
+/clj-nats.jar

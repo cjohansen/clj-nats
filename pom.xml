@@ -15,7 +15,6 @@
   </dependencies>
   <build>
     <sourceDirectory>src</sourceDirectory>
-    <sourceDirectory>docs</sourceDirectory>
   </build>
   <repositories>
     <repository>
