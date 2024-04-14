@@ -1,7 +1,7 @@
-# Idiomatic Clojure wrapper for jnats
+# clj-nats: Clojure NATS client library
 
-clj-nats is an idiomatic Clojure wrapper for the official
-[NATS](https://nats.io) Java SDK [jnats](https://javadoc.io/doc/io.nats/jnats/).
+clj-nats is a Clojure client library for [NATS](https://nats.io). It's based on
+the official Java SDK [jnats](https://javadoc.io/doc/io.nats/jnats/).
 
 Install:
 
@@ -22,7 +22,7 @@ Until then, use at risk of breaking changes.
 - [x] Streams
 - [x] Consumers
 - [x] Request/response
-- [ ] Key/value store
+- [ ] Key/value store (in progress)
 - [ ] Object store
 
 ## Rationale
