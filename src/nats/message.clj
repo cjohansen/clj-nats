@@ -113,7 +113,8 @@
 
 (defn publish-ack->map [^PublishAck ack]
   (when ack
-    {:nats.publish-ack/domain (.getDomain ack)
-     :nats.publish-ack/seq-no (.getSeqno ack)
-     :nats.publish-ack/stream (.getStream ack)
-     :nats.publish-ack/duplicate? (.isDuplicate ack)}))
+    (let [domain (.getDomain ack)]
+      (cond-> {:nats.publish-ack/seq-no (.getSeqno ack)
+               :nats.publish-ack/stream (.getStream ack)
+               :nats.publish-ack/duplicate? (.isDuplicate ack)}
+        domain (assoc :nats.publish-ack/domain domain)))))
