@@ -195,7 +195,7 @@
    - `:nats.consumer/start-time`"
   [conn config]
   (->> (build-consumer-configuration config)
-       (.addOrUpdateConsumer (.jetStreamManagement conn) (::stream-name config))
+       (.addOrUpdateConsumer (stream/jet-stream-management conn) (::stream-name config))
        consumer-info->map))
 
 (defn ^{:style/indent 1 :export true} update-consumer
@@ -204,28 +204,28 @@
   (create-consumer conn config))
 
 (defn ^:export delete-consumer [conn stream-name consumer-name]
-  (.deleteConsumer (.jetStreamManagement conn) stream-name consumer-name))
+  (.deleteConsumer (stream/jet-stream-management conn) stream-name consumer-name))
 
 (defn ^:export get-consumer-info [conn stream-name consumer-name]
-  (-> (.jetStreamManagement conn)
+  (-> (stream/jet-stream-management conn)
       (.getConsumerInfo stream-name consumer-name)
       consumer-info->map))
 
 (defn ^:export get-consumer-names [conn stream-name]
-  (set (.getConsumerNames (.jetStreamManagement conn) stream-name)))
+  (set (.getConsumerNames (stream/jet-stream-management conn) stream-name)))
 
 (defn ^:export get-consumers [conn stream-name]
-  (set (map consumer-info->map (.getConsumers (.jetStreamManagement conn) stream-name))))
+  (set (map consumer-info->map (.getConsumers (stream/jet-stream-management conn) stream-name))))
 
 ;; NATS 2.11 features. Requires a preview version
 (defn ^{:no-doc true :export true} pause-consumer [conn stream-name consumer-name ^Instant pause-until]
-  (-> (.jetStreamManagement conn)
+  (-> (stream/jet-stream-management conn)
       (.pauseConsumer stream-name consumer-name (.atZone pause-until nats/default-tz)))
   true)
 
 ;; NATS 2.11 features. Requires a preview version
 (defn ^{:no-doc true :export true} resume-consumer [conn stream-name consumer-name]
-  (-> (.jetStreamManagement conn)
+  (-> (stream/jet-stream-management conn)
       (.resumeConsumer stream-name consumer-name)
       stream/stream-info->map))
 
@@ -237,7 +237,7 @@
    - `:bytes`
    - `:threshold-pct`"
   [conn stream-name consumer-name & [opts]]
-  (-> (.getStreamContext conn stream-name)
+  (-> (.getStreamContext (nats/get-connection conn) stream-name)
       (.getConsumerContext consumer-name)
       (.iterate (build-consume-options opts))))
 
@@ -250,20 +250,24 @@
 
 (defn ^:export ack [conn message]
   (assert (not (nil? message)) "Can't ack without a message")
-  (nats/publish conn {::message/subject (::message/reply-to message)
-                      ::message/data (.bodyBytes AckType/AckAck -1)}))
+  (nats/publish conn
+    {::message/subject (::message/reply-to message)
+     ::message/data (.bodyBytes AckType/AckAck -1)}))
 
 (defn ^:export nak [conn message]
   (assert (not (nil? message)) "Can't nak without a message")
-  (nats/publish conn {::message/subject (::message/reply-to message)
-                      ::message/data (.bodyBytes AckType/AckNak -1)}))
+  (nats/publish conn
+    {::message/subject (::message/reply-to message)
+     ::message/data (.bodyBytes AckType/AckNak -1)}))
 
 (defn ^:export ack-in-progress [conn message]
   (assert (not (nil? message)) "Can't ack in progress without a message")
-  (nats/publish conn {::message/subject (::message/reply-to message)
-                      ::message/data (.bodyBytes AckType/AckProgress -1)}))
+  (nats/publish conn
+    {::message/subject (::message/reply-to message)
+     ::message/data (.bodyBytes AckType/AckProgress -1)}))
 
 (defn ^:export ack-term [conn message]
   (assert (not (nil? message)) "Can't ack term without a message")
-  (nats/publish conn {::message/subject (::message/reply-to message)
-                      ::message/data (.bodyBytes AckType/AckTerm -1)}))
+  (nats/publish conn
+    {::message/subject (::message/reply-to message)
+     ::message/data (.bodyBytes AckType/AckTerm -1)}))

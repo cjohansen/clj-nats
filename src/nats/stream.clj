@@ -1,8 +1,10 @@
 (ns nats.stream
   (:require [clojure.set :as set]
             [nats.cluster :as cluster]
+            [nats.core :as nats]
             [nats.message :as message])
-  (:import (io.nats.client JetStream Message PublishOptions PublishOptions$Builder
+  (:import (io.nats.client JetStream JetStreamOptions JetStreamOptions$Builder
+                           Message PublishOptions PublishOptions$Builder
                            PurgeOptions PurgeOptions$Builder)
            (io.nats.client.api AccountLimits AccountStatistics AccountTier ApiStats
                                CompressionOption ConsumerLimits DiscardPolicy External
@@ -246,12 +248,34 @@
     subject (.subject subject)
     :then (.build)))
 
-;; Helper function
+(defn ^:no-doc build-jet-stream-options
+  [{::keys [domain
+            opt-out-290-consumer-create?
+            prefix
+            publish-no-ack?
+            request-timeout]}]
+  (cond-> ^JetStreamOptions$Builder (JetStreamOptions/builder)
+    domain (.domain domain)
+    (boolean? opt-out-290-consumer-create?) (.optOut290ConsumerCreate opt-out-290-consumer-create?)
+    prefix (.prefix prefix)
+    (boolean? publish-no-ack?) (.publishNoAck publish-no-ack?)
+    request-timeout (.requestTimeout request-timeout)
+    :then (.build)))
+
+;; Helper functions
+
+(defn jet-stream-management [nats-conn]
+  (let [{:keys [jsm conn jet-stream-options]} @nats-conn]
+    (when-not jsm
+      (->> (build-jet-stream-options jet-stream-options)
+           (.jetStreamManagement conn)
+           (swap! nats-conn assoc :jsm))))
+  (:jsm @nats-conn))
 
 (defn ^:no-doc get-stream-info-object
   [conn stream-name & [{:keys [include-deleted-details?
                                filter-subjects]}]]
-  (-> (.jetStreamManagement conn)
+  (-> (jet-stream-management conn)
       (.getStreamInfo stream-name
                       (cond-> ^StreamInfoOptions$Builder (StreamInfoOptions/builder)
                         include-deleted-details? (.deletedDetails)
@@ -259,6 +283,23 @@
                         :always (.build)))))
 
 ;; Public API
+
+(defn ^:export configure
+  "Re-configure the JetStream management instance. Returns a new `conn` with the
+  new configuration, does not change the original `conn`.
+
+  `jet-stream-options` is a map of:
+
+  - `domain`
+  - `opt-out-290-consumer-create?`
+  - `prefix`
+  - `publish-no-ack?`
+  - `request-timeout`"
+  [conn jet-stream-options]
+  (let [conn-val @conn]
+    (-> (dissoc conn-val :jsm)
+        (assoc :jet-stream-options jet-stream-options)
+        atom)))
 
 (defn ^:export get-cluster-info [conn stream-name & [options]]
   (some-> (get-stream-info-object conn stream-name options)
@@ -307,37 +348,37 @@
 (defn ^:export get-stream-names [conn & [{:keys [subject-filter]}]]
   (set
    (if subject-filter
-     (.getStreamNames (.jetStreamManagement conn) subject-filter)
-     (.getStreamNames (.jetStreamManagement conn)))))
+     (.getStreamNames (jet-stream-management conn) subject-filter)
+     (.getStreamNames (jet-stream-management conn)))))
 
 (defn ^:export get-streams [conn & [{:keys [subject-filter]}]]
   (set (->> (if subject-filter
-              (.getStreams (.jetStreamManagement conn) subject-filter)
-              (.getStreams (.jetStreamManagement conn)))
+              (.getStreams (jet-stream-management conn) subject-filter)
+              (.getStreams (jet-stream-management conn)))
             (map stream-info->map))))
 
 (defn ^:export get-account-statistics [conn]
-  (-> (.jetStreamManagement conn)
+  (-> (jet-stream-management conn)
       .getAccountStatistics
       account-statistics->map))
 
 (defn ^:export get-first-message [conn stream-name subject]
-  (-> (.jetStreamManagement conn)
+  (-> (jet-stream-management conn)
       (.getFirstMessage stream-name subject)
       message/message-info->map))
 
 (defn ^:export get-last-message [conn stream-name subject]
-  (-> (.jetStreamManagement conn)
+  (-> (jet-stream-management conn)
       (.getLastMessage stream-name subject)
       message/message-info->map))
 
 (defn ^:export get-message [conn stream-name seq]
-  (-> (.jetStreamManagement conn)
+  (-> (jet-stream-management conn)
       (.getMessage stream-name seq)
       message/message-info->map))
 
 (defn ^:export get-next-message [conn stream-name seq subject]
-  (-> (.jetStreamManagement conn)
+  (-> (jet-stream-management conn)
       (.getNextMessage stream-name seq subject)
       message/message-info->map))
 
@@ -360,14 +401,14 @@
    - :nats.stream/max-msg-size
    - :nats.stream/replicas"
   [conn config]
-  (-> (.jetStreamManagement conn)
+  (-> (jet-stream-management conn)
       (.addStream (build-stream-configuration config))
       stream-info->map))
 
 (defn ^{:style/indent 1 :export true} update-stream
   "Updates a stream. See `create-stream` for valid options in `config`."
   [conn config]
-  (-> (.jetStreamManagement conn)
+  (-> (jet-stream-management conn)
       (.updateStream (build-stream-configuration config))
       stream-info->map))
 
@@ -396,18 +437,18 @@
   (assert (not (nil? (::message/subject message))) "Can't publish without data")
   (assert (not (nil? (::message/data message))) "Can't publish nil data")
   (->> ^PublishOptions (build-publish-options opts)
-       (.publish ^JetStream (.jetStream conn) ^Message (message/build-message message))
+       (.publish ^JetStream (.jetStream (nats/get-connection conn)) ^Message (message/build-message message))
        message/publish-ack->map))
 
 (defn ^:export delete-message
   "Delete the specific message from `stream-name` with `seq-n`."
   [conn stream-name seq-n & [{:keys [erase?] :as opt}]]
   (if opt
-    (.deleteMessage (.jetStreamManagement conn) stream-name seq-n (boolean erase?))
-    (.deleteMessage (.jetStreamManagement conn) stream-name seq-n)))
+    (.deleteMessage (jet-stream-management conn) stream-name seq-n (boolean erase?))
+    (.deleteMessage (jet-stream-management conn) stream-name seq-n)))
 
 (defn ^:export delete-stream [conn stream-name]
-  (.deleteStream (.jetStreamManagement conn) stream-name))
+  (.deleteStream (jet-stream-management conn) stream-name))
 
 (defn ^:export purge-stream
   "Purge stream `stream-name`. `opts` is a map of:
@@ -416,5 +457,5 @@
   - `:sequence`
   - `:subject`"
   [conn stream-name & [opts]]
-  (-> (.jetStreamManagement conn)
+  (-> (jet-stream-management conn)
       (.purgeStream stream-name (build-purge-options opts))))

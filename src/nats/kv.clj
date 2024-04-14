@@ -28,7 +28,7 @@
     request-timeout (.requestTimeout request-timeout)
     :then (.build)))
 
-(defn build-kvm-options [{::keys [stream-options domain prefix request-timeout]}]
+(defn build-kvo-options [{::keys [stream-options domain prefix request-timeout]}]
   (cond-> ^KeyValueOptions$Builder (KeyValueOptions/builder)
     stream-options (.jetStreamOptions (build-jet-stream-options stream-options))
     domain (.jsDomain domain)

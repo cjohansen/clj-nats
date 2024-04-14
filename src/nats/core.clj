@@ -11,11 +11,20 @@
    SDK expects."
   (ZoneId/of "GMT"))
 
-(defn ^:export connect [uri]
-  (Nats/connect uri))
+(defn ^:export connect
+  "Connect to the NATS server. Optionally configure jet stream and key/value
+  management, or use `nats.stream/configure` and `nats.kv/configure`
+  respectively later."
+  [uri & [{:keys [jet-stream-options key-value-options]}]]
+  (atom {:conn (Nats/connect uri)
+         :jet-stream-options jet-stream-options
+         :key-value-options key-value-options}))
+
+(defn ^:no-doc get-connection [conn]
+  (:conn @conn))
 
 (defn ^:export close [conn]
-  (.close conn))
+  (.close (get-connection conn)))
 
 (defn ^{:style/indent 1 :export true} publish
   "Publish a message. Performs no publish acking; do not use for publishing to a
@@ -32,7 +41,7 @@
   (assert (not (nil? (::message/subject message))) "Can't publish without data")
   (assert (not (nil? (::message/data message))) "Can't publish nil data")
   (->> (nats.message/build-message message)
-       (.publish conn)
+       (.publish (get-connection conn))
        message/publish-ack->map))
 
 (defn ^{:style/indent 1 :export true} subscribe
@@ -40,8 +49,8 @@
   `nats.stream/subscribe`. Pull messages with `nats.core/pull-message`."
   [conn subject & [queue-name]]
   (if queue-name
-    (.subscribe conn subject queue-name)
-    (.subscribe conn subject)))
+    (.subscribe (get-connection conn) subject queue-name)
+    (.subscribe (get-connection conn) subject)))
 
 (defn ^:export pull-message [^Subscription subscription timeout]
   (some-> (.nextMessage subscription timeout) message/message->map))
@@ -67,6 +76,6 @@
   (assert (not (nil? (::message/data message))) "Can't publish nil data")
   (future
     (->> (nats.message/build-message (dissoc message :nats.message/reply-to))
-         (.request conn)
+         (.request (get-connection conn))
          deref
          message/message->map)))
