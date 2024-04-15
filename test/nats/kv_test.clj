@@ -61,7 +61,7 @@
            :nats.kv/max-bucket-size 10
            :nats.kv/max-history-per-key 10
            :nats.kv/max-value-size 10
-           :nats.kv/metadata {"Status ""Ok"}
+           :nats.kv/metadata {"Status" "Ok", :lol "Yes"}
            :nats.kv/mirror {:nats.source/name "B"}
            :nats.kv/name "Bucket"
            :nats.kv/placement {:nats.placement/cluster "cluster"
