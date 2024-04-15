@@ -101,7 +101,7 @@
                        (source-base->map source)))
         subject-transform (some-> (.getSubjectTransform config) subject-transform->map)
         template-owner (.getTemplateOwner config)]
-    (cond-> {::allow-direct-access? (.getAllowDirect config)
+    (cond-> {::allow-direct? (.getAllowDirect config)
              ::allow-rollup? (.getAllowRollup config)
              ::compression-option (compression-option->k (.getCompressionOption config))
              ::consumer-limits (consumer-limits->map (.getConsumerLimits config))
@@ -211,7 +211,7 @@
   [{::keys [description
             subjects
             retention-policy
-            allow-direct-access?
+            allow-direct?
             allow-rollup?
             deny-delete?
             deny-purge?
@@ -227,7 +227,7 @@
     description (.description description)
     subjects (.subjects (into-array String subjects))
     retention-policy (.retentionPolicy (retention-policies retention-policy))
-    (boolean? allow-direct-access?) (.allowDirect allow-direct-access?)
+    (boolean? allow-direct?) (.allowDirect allow-direct?)
     (boolean? allow-rollup?) (.allowRollup allow-rollup?)
     (boolean? deny-delete?) (.denyDelete deny-delete?)
     (boolean? deny-purge?) (.denyPurge deny-purge?)
@@ -406,7 +406,7 @@
    - :nats.stream/description
    - :nats.stream/subjects
    - :nats.stream/retention-policy
-   - :nats.stream/allow-direct-access?
+   - :nats.stream/allow-direct?
    - :nats.stream/allow-rollup?
    - :nats.stream/deny-delete?
    - :nats.stream/deny-purge?

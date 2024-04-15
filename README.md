@@ -142,7 +142,7 @@ Create a stream:
 (stream/create-stream conn
   {:nats.stream/name "test-stream"
    :nats.stream/subjects ["test.work.>"]
-   :nats.stream/allow-direct-access? true
+   :nats.stream/allow-direct? true
    :nats.stream/retention-policy :nats.retention-policy/work-queue})
 ```
 

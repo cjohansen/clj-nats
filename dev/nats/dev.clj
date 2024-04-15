@@ -21,13 +21,13 @@
   (stream/create-stream conn
     {::stream/name "test-stream"
      ::stream/subjects #{"test.work.>"}
-     ::stream/allow-direct-access? true
+     ::stream/allow-direct? true
      ::stream/retention-policy :nats.retention-policy/work-queue})
 
   (stream/create-stream conn
     {::stream/name "other-stream"
      ::stream/subjects #{"test.events.>"}
-     ::stream/allow-direct-access? true
+     ::stream/allow-direct? true
      ::stream/retention-policy :nats.retention-policy/limits})
 
   (stream/get-stream-config conn "test-stream")

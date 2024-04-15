@@ -126,7 +126,7 @@
            :nats.stream/description "A test stream"
            :nats.stream/subjects #{"clj-nats.stream.>"}
            :nats.stream/retention-policy :nats.retention-policy/limits
-           :nats.stream/allow-direct-access? true
+           :nats.stream/allow-direct? true
            :nats.stream/allow-rollup? false
            :nats.stream/deny-delete? false
            :nats.stream/deny-purge? false
@@ -200,7 +200,7 @@
   (testing "Inspects stream configuration"
     (is (= (dissoc (:stream-config (run-stream-scenario))
                    :nats.stream/name)
-           {:nats.stream/allow-direct-access? true
+           {:nats.stream/allow-direct? true
             :nats.stream/max-msgs 20
             :nats.stream/no-ack? false
             :nats.stream/max-msgs-per-subject 5
@@ -374,7 +374,7 @@
            :nats.stream/description "A test stream"
            :nats.stream/subjects #{"clj-nats.stream.>"}
            :nats.stream/retention-policy :nats.retention-policy/limits
-           :nats.stream/allow-direct-access? true
+           :nats.stream/allow-direct? true
            :nats.stream/allow-rollup? false
            :nats.stream/deny-delete? false
            :nats.stream/deny-purge? false
