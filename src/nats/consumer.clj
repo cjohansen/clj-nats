@@ -111,7 +111,7 @@
             headers-only? idle-heartbeat inactive-threshold max-ack-pending max-batch
             max-bytes max-deliver max-expires max-pull-waiting mem-storage? metadata
             num-replicas pause-until rate-limit replay-policy sample-frequency
-            start-sequence sequence start-time] :as opts}]
+            start-sequence start-time] :as opts}]
   (let [consumer-name (::name opts)]
     (assert (or (not durable?) (not (nil? consumer-name))) "Durable consumers must have a :nats.consumer/name")
     (cond-> ^ConsumerConfiguration$Builder (ConsumerConfiguration/builder)
@@ -144,7 +144,6 @@
       (replay-policies replay-policy) (.replayPolicy (replay-policies replay-policy))
       sample-frequency (.sampleFrequency sample-frequency)
       start-sequence (.startSequence start-sequence)
-      sequence (.startSequence sequence)
       start-time (.startTime (.atZone start-time nats/default-tz))
       :then (.build))))
 
