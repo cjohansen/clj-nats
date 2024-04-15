@@ -29,8 +29,8 @@
 (def ^:no-doc deliver-policy->k (set/map-invert deliver-policies))
 
 (def replay-policies
-  {:nats.replay-policy/limits ReplayPolicy/Instant
-   :nats.replay-policy/work-queue ReplayPolicy/Original})
+  {:nats.replay-policy/instant ReplayPolicy/Instant
+   :nats.replay-policy/original ReplayPolicy/Original})
 
 (def ^:no-doc replay-policy->k (set/map-invert replay-policies))
 
