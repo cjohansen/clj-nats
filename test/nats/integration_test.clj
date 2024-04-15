@@ -461,9 +461,9 @@
             :nats.consumer/name "TEST_CONSUMER_NAME"
             :nats.consumer/pause-remaining nil
             :nats.consumer/push-bound? false
-            :nats.consumer/num-waiting 0
+            :nats.consumer/waiting 0
             :nats.consumer/ack-floor nil
-            :nats.consumer/num-pending 2
+            :nats.consumer/pending 2
             :nats.consumer/paused false
             :nats.consumer/calculated-pending 2
             :nats.consumer/redelivered 0
@@ -486,9 +486,9 @@
              :nats.consumer/max-ack-pending-was-set? true
              :nats.consumer/metadata-was-set? false
              :nats.consumer/mem-storage? false
-             :nats.consumer/num-replicas 0
+             :nats.consumer/replicas 0
              :nats.consumer/flow-control? false
-             :nats.consumer/num-replicas-was-set? true
+             :nats.consumer/replicas-was-set? true
              :nats.consumer/idle-heartbeat nil
              :nats.consumer/replay-policy-was-set? true
              :nats.consumer/metadata {}
@@ -504,7 +504,7 @@
              :nats.consumer/has-multiple-filter-subjects? false
              :nats.consumer/max-pull-waiting-was-set? true
              :nats.consumer/headers-only-was-set? false
-             :nats.consumer/replay-policy :nats.replay-policy/limits
+             :nats.consumer/replay-policy :nats.replay-policy/instant
              :nats.consumer/max-batch-was-set? false
              :nats.consumer/deliver-policy-was-set? true
              :nats.consumer/start-sequence 0

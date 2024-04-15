@@ -78,7 +78,7 @@
              ::max-pull-waiting (.getMaxPullWaiting config)
              ::metadata (into {} (.getMetadata config))
              ::consumer-name (.getName config)
-             ::num-replicas (.getNumReplicas config)
+             ::replicas (.getNumReplicas config)
              ::pause-until (.getPauseUntil config)
              ::rate-limit (.getRateLimit config)
              ::replay-policy (replay-policy->k (.getReplayPolicy config))
@@ -97,7 +97,7 @@
              ::max-pull-waiting-was-set? (.maxPullWaitingWasSet config)
              ::mem-storage-was-set? (.memStorageWasSet config)
              ::metadata-was-set? (.metadataWasSet config)
-             ::num-replicas-was-set? (.numReplicasWasSet config)
+             ::replicas-was-set? (.numReplicasWasSet config)
              ::rate-limit-was-set? (.rateLimitWasSet config)
              ::replay-policy-was-set? (.replayPolicyWasSet config)
              ::start-seq-was-set? (.startSeqWasSet config)}
@@ -112,8 +112,8 @@
    ::delivered (some-> (.getDelivered info) .getLastActive)
    ::name (.getName info)
    ::ack-pending (.getNumAckPending info)
-   ::num-pending (.getNumPending info)
-   ::num-waiting (.getNumWaiting info)
+   ::pending (.getNumPending info)
+   ::waiting (.getNumWaiting info)
    ::paused (.getPaused info)
    ::pause-remaining (.getPauseRemaining info)
    ::redelivered (.getRedelivered info)
@@ -128,7 +128,7 @@
             description durable? filter-subjects flow-control headers-only?
             idle-heartbeat inactive-threshold max-ack-pending max-batch max-bytes
             max-deliver max-expires max-pull-waiting mem-storage? metadata
-            num-replicas pause-until rate-limit replay-policy sample-frequency
+            replicas pause-until rate-limit replay-policy sample-frequency
             start-sequence start-time] :as opts}]
   (let [consumer-name (::name opts)]
     (assert (or (not durable?) (not (nil? consumer-name))) "Durable consumers must have a :nats.consumer/name")
@@ -155,7 +155,7 @@
       mem-storage? (.memStorage mem-storage?)
       metadata (.metadata metadata)
       (and consumer-name (not durable?)) (.name consumer-name)
-      num-replicas (.numReplicas num-replicas)
+      replicas (.numReplicas replicas)
       pause-until (.pauseUntil pause-until)
       rate-limit (.rateLimit rate-limit)
       (replay-policies replay-policy) (.replayPolicy (replay-policies replay-policy))
@@ -194,7 +194,7 @@
    - `:nats.consumer/max-expires` - Number of milliseconds or a `java.time.Duration`
    - `:nats.consumer/max-pull-waiting` - Maximum number of outstanding pulls to accept
    - `:nats.consumer/metadata`
-   - `:nats.consumer/num-replicas`
+   - `:nats.consumer/replicas` - Number of replicas
    - `:nats.consumer/replay-policy` - See `nats.consumer/replay-policies`
    - `:nats.consumer/sample-frequency` - Percentage of requests to sample for monitoring purposes
    - `:nats.consumer/start-sequence`
