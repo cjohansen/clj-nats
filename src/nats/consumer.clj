@@ -269,25 +269,37 @@
   (.close subscription)
   nil)
 
-(defn ^:export ack [conn message]
+(defn ^:export ack
+  "Acknowledge to the server that a message is successfully processed."
+  [conn message]
   (assert (not (nil? message)) "Can't ack without a message")
   (nats/publish conn
     {::message/subject (::message/reply-to message)
      ::message/data (.bodyBytes AckType/AckAck -1)}))
 
-(defn ^:export nak [conn message]
+(defn ^:export nak
+  "Tell the server that processing was not successful, and the message should be
+  re-delivered later."
+  [conn message]
   (assert (not (nil? message)) "Can't nak without a message")
   (nats/publish conn
     {::message/subject (::message/reply-to message)
      ::message/data (.bodyBytes AckType/AckNak -1)}))
 
-(defn ^:export ack-in-progress [conn message]
+(defn ^:export ack-in-progress
+  "Acknowledge to the server that processing is in progress. Use this if
+  processing takes longer than your acknowledgement window. It's probably best
+  to try to avoid needing to call this."
+  [conn message]
   (assert (not (nil? message)) "Can't ack in progress without a message")
   (nats/publish conn
     {::message/subject (::message/reply-to message)
      ::message/data (.bodyBytes AckType/AckProgress -1)}))
 
-(defn ^:export ack-term [conn message]
+(defn ^:export ack-term
+  "Tell the server that processing this message was not successful, and that it
+  should not be re-delivered."
+  [conn message]
   (assert (not (nil? message)) "Can't ack term without a message")
   (nats/publish conn
     {::message/subject (::message/reply-to message)
