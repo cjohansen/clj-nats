@@ -200,7 +200,7 @@
   (testing "Inspects stream configuration"
     (is (= (dissoc (:stream-config (run-stream-scenario))
                    :nats.stream/name)
-           {:nats.stream/allow-direct? true
+           {:nats.stream/allow-direct-access? true
             :nats.stream/max-msgs 20
             :nats.stream/no-ack? false
             :nats.stream/max-msgs-per-subject 5

@@ -101,7 +101,7 @@
                        (source-base->map source)))
         subject-transform (some-> (.getSubjectTransform config) subject-transform->map)
         template-owner (.getTemplateOwner config)]
-    (cond-> {::allow-direct? (.getAllowDirect config)
+    (cond-> {::allow-direct-access? (.getAllowDirect config)
              ::allow-rollup? (.getAllowRollup config)
              ::compression-option (compression-option->k (.getCompressionOption config))
              ::consumer-limits (consumer-limits->map (.getConsumerLimits config))
