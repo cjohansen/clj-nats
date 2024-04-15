@@ -12,6 +12,11 @@
 ;; Enums as keywords
 
 (def ack-policies
+  "Available acknowledgment policies. One of:
+
+   - `:nats.ack-policy/all`
+   - `:nats.ack-policy/explicit`
+   - `:nats.ack-policy/none`"
   {:nats.ack-policy/all AckPolicy/All
    :nats.ack-policy/explicit AckPolicy/Explicit
    :nats.ack-policy/none AckPolicy/None})
@@ -19,6 +24,14 @@
 (def ^:no-doc ack-policy->k (set/map-invert ack-policies))
 
 (def deliver-policies
+  "Available deliver policies. One of:
+
+   - `:nats.deliver-policy/all`
+   - `:nats.deliver-policy/by-start-sequence`
+   - `:nats.deliver-policy/by-start-time`
+   - `:nats.deliver-policy/last`
+   - `:nats.deliver-policy/last-per-subject`
+   - `:nats.deliver-policy/new`"
   {:nats.deliver-policy/all DeliverPolicy/All
    :nats.deliver-policy/by-start-sequence DeliverPolicy/ByStartSequence
    :nats.deliver-policy/by-start-time DeliverPolicy/ByStartTime
@@ -29,6 +42,10 @@
 (def ^:no-doc deliver-policy->k (set/map-invert deliver-policies))
 
 (def replay-policies
+  "Available replay policies. One of:
+
+   - `:nats.replay-policy/instant`
+   - `:nats.replay-policy/original`"
   {:nats.replay-policy/instant ReplayPolicy/Instant
    :nats.replay-policy/original ReplayPolicy/Original})
 
@@ -161,37 +178,43 @@
   "Create consumer. `config` is a map of:
 
    - `:nats.consumer/name`
-   - `:nats.consumer/ack-policy`
-   - `:nats.consumer/ack-wait`
-   - `:nats.consumer/backoff`
-   - `:nats.consumer/deliver-group`
-   - `:nats.consumer/deliver-policy`
-   - `:nats.consumer/deliver-subject`
+   - `:nats.consumer/stream-name`
+   - `:nats.consumer/ack-policy` - See `nats.consumer/ack-policies`
+   - `:nats.consumer/ack-wait` - Number of milliseconds or a `java.time.Duration`
+   - `:nats.consumer/deliver-policy` - See `nats.consumer/deliver-policies`
    - `:nats.consumer/description`
-   - `:nats.consumer/durable?`
+   - `:nats.consumer/durable?` - Makes stream durable.
+   - `:nats.consumer/mem-storage?` - Forces consumer state to live in memory, instead of whatever the stream default is.
    - `:nats.consumer/filter-subject`
    - `:nats.consumer/filter-subjects`
-   - `:nats.consumer/flow-control`
    - `:nats.consumer/headers-only?`
-   - `:nats.consumer/idle-heartbeat`
-   - `:nats.consumer/inactive-threshold`
-   - `:nats.consumer/max-ack-pending`
-   - `:nats.consumer/max-batch`
-   - `:nats.consumer/max-bytes`
-   - `:nats.consumer/max-deliver`
-   - `:nats.consumer/max-expires`
-   - `:nats.consumer/max-pull-waiting`
-   - `:nats.consumer/mem-storage?`
+   - `:nats.consumer/max-ack-pending` - Maximum outstanding acks before consumers are paused
+   - `:nats.consumer/max-batch` - Maximum number of messages allowed in a single pull
+   - `:nats.consumer/max-bytes` - Maximum number of bytes allowed in a single pull
+   - `:nats.consumer/max-deliver` - Maximum number of times to deliver a message
+   - `:nats.consumer/max-expires` - Number of milliseconds or a `java.time.Duration`
+   - `:nats.consumer/max-pull-waiting` - Maximum number of outstanding pulls to accept
    - `:nats.consumer/metadata`
    - `:nats.consumer/num-replicas`
-   - `:nats.consumer/pause-until`
-   - `:nats.consumer/rate-limit`
-   - `:nats.consumer/replay-policy`
-   - `:nats.consumer/sample-frequency`
+   - `:nats.consumer/replay-policy` - See `nats.consumer/replay-policies`
+   - `:nats.consumer/sample-frequency` - Percentage of requests to sample for monitoring purposes
    - `:nats.consumer/start-sequence`
-   - `:nats.consumer/stream-name`
    - `:nats.consumer/sequence`
-   - `:nats.consumer/start-time`"
+   - `:nats.consumer/start-time` - A `java.time.Instant`
+
+  Options for ephemeral consumers:
+   - `:nats.consumer/inactive-threshold` - Number of milliseconds or a `java.time.Duration`. Maximum idle time before consumer is removed.
+
+  Options for push consumers (not recommended)
+   - `:nats.consumer/flow-control` - Number of milliseconds or a `java.time.Duration`
+   - `:nats.consumer/backoff`
+   - `:nats.consumer/deliver-group`
+   - `:nats.consumer/deliver-subject`
+   - `:nats.consumer/idle-heartbeat` - Number of milliseconds or a `java.time.Duration`
+   - `:nats.consumer/rate-limit`
+
+  Requires a NATS 2.11 alpha server
+   - `:nats.consumer/pause-until` - A `java.time.Instant`"
   [conn config]
   (->> (build-consumer-configuration config)
        (.addOrUpdateConsumer (stream/jet-stream-management conn) (::stream-name config))
