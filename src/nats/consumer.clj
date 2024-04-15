@@ -54,53 +54,54 @@
 ;; Map data classes to maps
 
 (defn ^:no-doc consumer-configuration->map [^ConsumerConfiguration config]
-  {::ack-policy-was-set? (.ackPolicyWasSet config)
-   ::backoff-was-set? (.backoffWasSet config)
-   ::deliver-policy-was-set? (.deliverPolicyWasSet config)
-   ::flow-control-was-set? (.flowControlWasSet config)
-   ::ack-policy (ack-policy->k (.getAckPolicy config))
-   ::ack-wait (.getAckWait config)
-   ::backoff (seq (.getBackoff config))
-   ::deliver-group (.getDeliverGroup config)
-   ::deliver-policy (deliver-policy->k (.getDeliverPolicy config))
-   ::deliver-subject (.getDeliverSubject config)
-   ::description (.getDescription config)
-   ::durable (.getDurable config)
-   ::filter-subject (.getFilterSubject config)
-   ::filter-subjects (.getFilterSubjects config)
-   ::idle-heartbeat (.getIdleHeartbeat config)
-   ::inactve-threshold (.getInactiveThreshold config)
-   ::max-ack-pending (.getMaxAckPending config)
-   ::max-batch (.getMaxBatch config)
-   ::max-bytes (.getMaxBytes config)
-   ::max-deliver (.getMaxDeliver config)
-   ::max-expires (.getMaxExpires config)
-   ::max-pull-waiting (.getMaxPullWaiting config)
-   ::metadata (into {} (.getMetadata config))
-   ::consumer-name (.getName config)
-   ::num-replicas (.getNumReplicas config)
-   ::pause-until (.getPauseUntil config)
-   ::rate-limit (.getRateLimit config)
-   ::replay-policy (replay-policy->k (.getReplayPolicy config))
-   ::sample-frequency (.getSampleFrequency config)
-   ::start-sequence (.getStartSequence config)
-   ::start-time (some-> (.getStartTime config) .toInstant)
-   ::has-multiple-filter-subjects? (.hasMultipleFilterSubjects config)
-   ::headers-only-was-set? (.headersOnlyWasSet config)
-   ::flow-control? (.isFlowControl config)
-   ::headers-only? (.isHeadersOnly config)
-   ::mem-storage? (.isMemStorage config)
-   ::max-ack-pending-was-set? (.maxAckPendingWasSet config)
-   ::max-batch-was-set? (.maxBatchWasSet config)
-   ::max-bytes-was-set? (.maxBytesWasSet config)
-   ::max-deliver-was-set? (.maxDeliverWasSet config)
-   ::max-pull-waiting-was-set? (.maxPullWaitingWasSet config)
-   ::mem-storage-was-set? (.memStorageWasSet config)
-   ::metadata-was-set? (.metadataWasSet config)
-   ::num-replicas-was-set? (.numReplicasWasSet config)
-   ::rate-limit-was-set? (.rateLimitWasSet config)
-   ::replay-policy-was-set? (.replayPolicyWasSet config)
-   ::start-seq-was-set? (.startSeqWasSet config)})
+  (let [filter-subject (.getFilterSubject config)]
+    (cond-> {::ack-policy-was-set? (.ackPolicyWasSet config)
+             ::backoff-was-set? (.backoffWasSet config)
+             ::deliver-policy-was-set? (.deliverPolicyWasSet config)
+             ::flow-control-was-set? (.flowControlWasSet config)
+             ::ack-policy (ack-policy->k (.getAckPolicy config))
+             ::ack-wait (.getAckWait config)
+             ::backoff (seq (.getBackoff config))
+             ::deliver-group (.getDeliverGroup config)
+             ::deliver-policy (deliver-policy->k (.getDeliverPolicy config))
+             ::deliver-subject (.getDeliverSubject config)
+             ::description (.getDescription config)
+             ::durable (.getDurable config)
+             ::filter-subjects (.getFilterSubjects config)
+             ::idle-heartbeat (.getIdleHeartbeat config)
+             ::inactve-threshold (.getInactiveThreshold config)
+             ::max-ack-pending (.getMaxAckPending config)
+             ::max-batch (.getMaxBatch config)
+             ::max-bytes (.getMaxBytes config)
+             ::max-deliver (.getMaxDeliver config)
+             ::max-expires (.getMaxExpires config)
+             ::max-pull-waiting (.getMaxPullWaiting config)
+             ::metadata (into {} (.getMetadata config))
+             ::consumer-name (.getName config)
+             ::num-replicas (.getNumReplicas config)
+             ::pause-until (.getPauseUntil config)
+             ::rate-limit (.getRateLimit config)
+             ::replay-policy (replay-policy->k (.getReplayPolicy config))
+             ::sample-frequency (.getSampleFrequency config)
+             ::start-sequence (.getStartSequence config)
+             ::start-time (some-> (.getStartTime config) .toInstant)
+             ::has-multiple-filter-subjects? (.hasMultipleFilterSubjects config)
+             ::headers-only-was-set? (.headersOnlyWasSet config)
+             ::flow-control? (.isFlowControl config)
+             ::headers-only? (.isHeadersOnly config)
+             ::mem-storage? (.isMemStorage config)
+             ::max-ack-pending-was-set? (.maxAckPendingWasSet config)
+             ::max-batch-was-set? (.maxBatchWasSet config)
+             ::max-bytes-was-set? (.maxBytesWasSet config)
+             ::max-deliver-was-set? (.maxDeliverWasSet config)
+             ::max-pull-waiting-was-set? (.maxPullWaitingWasSet config)
+             ::mem-storage-was-set? (.memStorageWasSet config)
+             ::metadata-was-set? (.metadataWasSet config)
+             ::num-replicas-was-set? (.numReplicasWasSet config)
+             ::rate-limit-was-set? (.rateLimitWasSet config)
+             ::replay-policy-was-set? (.replayPolicyWasSet config)
+             ::start-seq-was-set? (.startSeqWasSet config)}
+      filter-subject (assoc ::filter-subject filter-subject))))
 
 (defn ^:no-doc consumer-info->map [^ConsumerInfo info]
   {::ack-floor (some-> (.getAckFloor info) .getLastActive)
@@ -124,9 +125,9 @@
 
 (defn ^:no-doc build-consumer-configuration
   [{::keys [ack-policy ack-wait backoff deliver-group deliver-policy deliver-subject
-            description durable? filter-subject filter-subjects flow-control
-            headers-only? idle-heartbeat inactive-threshold max-ack-pending max-batch
-            max-bytes max-deliver max-expires max-pull-waiting mem-storage? metadata
+            description durable? filter-subjects flow-control headers-only?
+            idle-heartbeat inactive-threshold max-ack-pending max-batch max-bytes
+            max-deliver max-expires max-pull-waiting mem-storage? metadata
             num-replicas pause-until rate-limit replay-policy sample-frequency
             start-sequence start-time] :as opts}]
   (let [consumer-name (::name opts)]
@@ -140,7 +141,6 @@
       deliver-subject (.deliverSubject deliver-subject)
       description (.description description)
       durable? (.durable consumer-name)
-      filter-subject (.filterSubject filter-subject)
       filter-subjects (.filterSubjects (into-array String filter-subjects))
       flow-control (.flowControl flow-control)
       headers-only? (.headersOnly headers-only?)
@@ -185,7 +185,6 @@
    - `:nats.consumer/description`
    - `:nats.consumer/durable?` - Makes stream durable.
    - `:nats.consumer/mem-storage?` - Forces consumer state to live in memory, instead of whatever the stream default is.
-   - `:nats.consumer/filter-subject`
    - `:nats.consumer/filter-subjects`
    - `:nats.consumer/headers-only?`
    - `:nats.consumer/max-ack-pending` - Maximum outstanding acks before consumers are paused
