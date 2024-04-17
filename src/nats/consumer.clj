@@ -104,7 +104,8 @@
       filter-subject (assoc ::filter-subject filter-subject))))
 
 (defn ^:no-doc consumer-info->map [^ConsumerInfo info]
-  {::ack-floor (some-> (.getAckFloor info) .getLastActive)
+  {::id (keyword (.getStreamName info) (.getName info))
+   ::ack-floor (some-> (.getAckFloor info) .getLastActive)
    ::calculated-pending (.getCalculatedPending info)
    ::cluster-info (cluster/cluster-info->map (.getClusterInfo info))
    ::consumer-configuration (consumer-configuration->map (.getConsumerConfiguration info))
@@ -125,12 +126,12 @@
 
 (defn ^:no-doc build-consumer-configuration
   [{::keys [ack-policy ack-wait backoff deliver-group deliver-policy deliver-subject
-            description durable? filter-subjects flow-control headers-only?
+            description durable? filter-subjects flow-control headers-only? id
             idle-heartbeat inactive-threshold max-ack-pending max-batch max-bytes
             max-deliver max-expires max-pull-waiting mem-storage? metadata
             replicas pause-until rate-limit replay-policy sample-frequency
             start-sequence start-time] :as opts}]
-  (let [consumer-name (::name opts)]
+  (let [consumer-name (or (::name opts) (some-> id name))]
     (assert (or (not durable?) (not (nil? consumer-name))) "Durable consumers must have a :nats.consumer/name")
     (cond-> ^ConsumerConfiguration$Builder (ConsumerConfiguration/builder)
       (ack-policies ack-policy) (.ackPolicy (ack-policies ack-policy))
@@ -177,6 +178,7 @@
 (defn ^{:style/indent 1 :export true} create-consumer
   "Create consumer. `config` is a map of:
 
+   - `:nats.consumer/id` - A keyword with the stream name for namespace and consumer name for name, e.g. `:<stream>/<consumer>`
    - `:nats.consumer/name`
    - `:nats.consumer/stream-name`
    - `:nats.consumer/ack-policy` - See `nats.consumer/ack-policies`
@@ -215,22 +217,29 @@
   Requires a NATS 2.11 alpha server
    - `:nats.consumer/pause-until` - A `java.time.Instant`"
   [conn config]
-  (->> (build-consumer-configuration config)
-       (.addOrUpdateConsumer (stream/jet-stream-management conn) (::stream-name config))
-       consumer-info->map))
+  (let [stream-name (or (some-> (::id config) namespace) (::stream-name config))]
+    (->> (build-consumer-configuration config)
+         (.addOrUpdateConsumer (stream/jet-stream-management conn) stream-name)
+         consumer-info->map)))
 
 (defn ^{:style/indent 1 :export true} update-consumer
   "Update consumer. See `create-consumer` for keys in `config`."
   [conn config]
   (create-consumer conn config))
 
-(defn ^:export delete-consumer [conn stream-name consumer-name]
-  (.deleteConsumer (stream/jet-stream-management conn) stream-name consumer-name))
+(defn ^:export delete-consumer
+  ([conn id]
+   (delete-consumer conn (namespace id) (name id)))
+  ([conn stream-name consumer-name]
+   (.deleteConsumer (stream/jet-stream-management conn) stream-name consumer-name)))
 
-(defn ^:export get-consumer-info [conn stream-name consumer-name]
-  (-> (stream/jet-stream-management conn)
-      (.getConsumerInfo stream-name consumer-name)
-      consumer-info->map))
+(defn ^:export get-consumer-info
+  ([conn id]
+   (get-consumer-info conn (namespace id) (name id)))
+  ([conn stream-name consumer-name]
+   (-> (stream/jet-stream-management conn)
+       (.getConsumerInfo stream-name consumer-name)
+       consumer-info->map)))
 
 (defn ^:export get-consumer-names [conn stream-name]
   (set (.getConsumerNames (stream/jet-stream-management conn) stream-name)))
@@ -239,16 +248,22 @@
   (set (map consumer-info->map (.getConsumers (stream/jet-stream-management conn) stream-name))))
 
 ;; NATS 2.11 features. Requires a preview version
-(defn ^{:no-doc true :export true} pause-consumer [conn stream-name consumer-name ^Instant pause-until]
-  (-> (stream/jet-stream-management conn)
-      (.pauseConsumer stream-name consumer-name (.atZone pause-until nats/default-tz)))
-  true)
+(defn ^{:no-doc true :export true} pause-consumer
+  ([conn id ^Instant pause-until]
+   (pause-consumer conn (namespace id) (name id) pause-until))
+  ([conn stream-name consumer-name ^Instant pause-until]
+   (-> (stream/jet-stream-management conn)
+       (.pauseConsumer stream-name consumer-name (.atZone pause-until nats/default-tz)))
+   true))
 
 ;; NATS 2.11 features. Requires a preview version
-(defn ^{:no-doc true :export true} resume-consumer [conn stream-name consumer-name]
-  (-> (stream/jet-stream-management conn)
-      (.resumeConsumer stream-name consumer-name)
-      stream/stream-info->map))
+(defn ^{:no-doc true :export true} resume-consumer
+  ([conn id]
+   (resume-consumer conn (namespace id) (name id)))
+  ([conn stream-name consumer-name]
+   (-> (stream/jet-stream-management conn)
+       (.resumeConsumer stream-name consumer-name)
+       stream/stream-info->map)))
 
 (defn ^{:style/indent 1 :export true} subscribe
   "Subscribe to messages on `stream-name` for `consumer-name`. `opts` is a map of:
@@ -257,10 +272,16 @@
    - `:batch-size`
    - `:bytes`
    - `:threshold-pct`"
-  [conn stream-name consumer-name & [opts]]
-  (-> (.getStreamContext (nats/get-connection conn) stream-name)
-      (.getConsumerContext consumer-name)
-      (.iterate (build-consume-options opts))))
+  ([conn id]
+   (subscribe conn (namespace id) (name id) {}))
+  ([conn id opts]
+   (if (keyword? id)
+     (subscribe conn (namespace id) (name id) opts)
+     (subscribe conn id opts {})))
+  ([conn stream-name consumer-name opts]
+   (-> (.getStreamContext (nats/get-connection conn) stream-name)
+       (.getConsumerContext consumer-name)
+       (.iterate (build-consume-options opts)))))
 
 (defn ^:export pull-message [^IterableConsumer subscription timeout]
   (some-> (.nextMessage subscription timeout) message/message->map))

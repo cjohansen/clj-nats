@@ -350,8 +350,11 @@
         consumer-re (re-pattern consumer-name)]
     (walk/postwalk
      (fn [x]
-       (println (type x) x)
        (cond
+         (keyword? x) (read-string
+                       (-> (str x)
+                           (str/replace stream-re "TEST_STREAM_NAME")
+                           (str/replace consumer-re "TEST_CONSUMER_NAME")))
          (= x stream-name) "TEST_STREAM_NAME"
          (= x consumer-name) "TEST_CONSUMER_NAME"
          (string? x) (-> x
@@ -364,7 +367,8 @@
   (when (or force? (nil? @consumer-data))
     (let [conn (nats/connect "nats://localhost:4222")
           stream-name (str "clj-nats-" (random-uuid))
-          consumer-name (str "clj-nats-" (random-uuid))]
+          consumer-name (str "clj-nats-" (random-uuid))
+          id (keyword stream-name consumer-name)]
       (reset! consumer-data {:stream-name stream-name
                              :consumer-name consumer-name
                              :messages []})
@@ -387,8 +391,7 @@
            :nats.stream/replicas 1})
 
         (consumer/create-consumer conn
-          {:nats.consumer/name consumer-name
-           :nats.consumer/stream-name stream-name
+          {:nats.consumer/id id
            :nats.consumer/ack-policy :nats.ack-policy/explicit
            :nats.consumer/description "Primary stream consumer"
            :nats.consumer/durable? true
@@ -411,11 +414,11 @@
           {:stream stream-name})
 
         (swap! consumer-data assoc
-               :pre-consumer-info (consumer/get-consumer-info conn stream-name consumer-name)
+               :pre-consumer-info (consumer/get-consumer-info conn id)
                :consumer-names (consumer/get-consumer-names conn stream-name)
                :consumers (consumer/get-consumers conn stream-name))
 
-        (let [subscription (consumer/subscribe conn stream-name consumer-name)
+        (let [subscription (consumer/subscribe conn id)
               message (consumer/pull-message subscription 10)]
           (swap! consumer-data update :messages conj message)
           (consumer/nak conn message)
@@ -438,7 +441,7 @@
           (consumer/unsubscribe subscription))
 
         (finally
-          (consumer/delete-consumer conn stream-name consumer-name)
+          (consumer/delete-consumer conn id)
           (stream/delete-stream conn stream-name)))
       (nats/close conn)))
   (remove-randomness @consumer-data))
@@ -457,7 +460,8 @@
                :pre-consumer-info
                (dissoc :nats.consumer/timestamp
                        :nats.consumer/creation-time))
-           {:nats.consumer/stream-name "TEST_STREAM_NAME"
+           {:nats.consumer/id :TEST_STREAM_NAME/TEST_CONSUMER_NAME,
+            :nats.consumer/stream-name "TEST_STREAM_NAME"
             :nats.consumer/name "TEST_CONSUMER_NAME"
             :nats.consumer/pause-remaining nil
             :nats.consumer/push-bound? false
