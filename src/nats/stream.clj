@@ -453,9 +453,15 @@
   [conn message & [opts]]
   (assert (not (nil? (::message/subject message))) "Can't publish without data")
   (assert (not (nil? (::message/data message))) "Can't publish nil data")
-  (->> ^PublishOptions (build-publish-options opts)
-       (.publish ^JetStream (.jetStream (nats/get-connection conn)) ^Message (message/build-message message))
-       message/publish-ack->map))
+  (try
+    (->> ^PublishOptions (build-publish-options opts)
+         (.publish ^JetStream (.jetStream (nats/get-connection conn)) ^Message (message/build-message message))
+         message/publish-ack->map)
+    (catch java.io.IOException e
+      (if (empty? (get-streams conn {:subject-filter (:nats.message/subject message)}))
+        (throw (ex-info "nats.stream/publish published to a non-stream subject, and failed to ack. If you meant to publish to a stream, check the subject, else use nats.core/publish"
+                        {:message message} e))
+        (throw e)))))
 
 (defn ^:export delete-message
   "Delete the specific message from `stream-name` with `seq-n`."

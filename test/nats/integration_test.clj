@@ -113,6 +113,32 @@
               :nats.message/reply-to nil
               :nats.message/status-message? false}]}))))
 
+(deftest stream-mispublish-test
+  (testing "Yields a nice error when stream/publish-ing to a non-stream subject"
+    (is (= (-> (let [stream-name (str "clj-nats-" (random-uuid))
+                     conn (nats/connect "nats://localhost:4222")]
+                 (try
+                   (stream/create-stream conn
+                     {:nats.stream/name stream-name
+                      :nats.stream/subjects #{"clj-nats.fail.stream.>"}
+                      :nats.stream/retention-policy :nats.retention-policy/limits})
+
+                   ;; Publishing to the "root" subject, which isn't actually a part of the
+                   ;; stream is an easy mistake to make. This will cause the publish ack to
+                   ;; fail, and jnats then throws a rather unhelpful error about the NATS
+                   ;; connection.
+                   (stream/publish conn
+                     {:nats.message/subject "clj-nats.fail.stream"
+                      :nats.message/data "Hello, I'll fail"}
+                     {:stream-timeout 50})
+                   (catch Exception e
+                     e)
+                   (finally
+                     (stream/delete-stream conn stream-name)
+                     (nats/close conn))))
+               .getMessage)
+           "nats.stream/publish published to a non-stream subject, and failed to ack. If you meant to publish to a stream, check the subject, else use nats.core/publish"))))
+
 (def stream-data (atom nil))
 
 (defn run-stream-scenario [& [{:keys [force?]}]]
