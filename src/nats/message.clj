@@ -55,7 +55,11 @@
       :always (.build))))
 
 (defn ^:no-doc bytes->edn [data]
-  (read-string (String. data)))
+  (let [s (String. data)]
+    (try
+      (read-string s)
+      (catch Exception e
+        (throw (ex-info "Unable to parse body of EDN message" {:data s} e))))))
 
 (defn ^:no-doc get-message-data [headers data]
   (let [content-type (first (get headers "content-type"))]
