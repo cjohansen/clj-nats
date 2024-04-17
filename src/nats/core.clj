@@ -1,5 +1,6 @@
 (ns nats.core
-  (:require [nats.message :as message])
+  (:require [clojure.string :as str]
+            [nats.message :as message])
   (:import (io.nats.client Nats Subscription)
            (java.time ZoneId)))
 
@@ -10,6 +11,28 @@
    timezone is here only to convert incoming Instants to the ZonedDateTime the Java
    SDK expects."
   (ZoneId/of "GMT"))
+
+(defn- covers? [haystacks needles]
+  (if (< (count needles) (count haystacks))
+    false
+    (loop [[haystack & haystacks] haystacks
+           [needle & needles] needles]
+      (cond
+        (and (empty? haystack) (empty? needle))
+        true
+
+        (= haystack needle)
+        (recur haystacks needles)
+
+        (and (= "*" haystack) needle)
+        (recur haystacks needles)
+
+        (and (= ">" haystack) needle)
+        true))))
+
+(defn ^:no-doc covers-subject? [patterns subject]
+  (let [s-pieces (str/split subject #"\.")]
+    (boolean (some #(covers? (str/split % #"\.") s-pieces) patterns))))
 
 (defn ^:export connect
   "Connect to the NATS server. Optionally configure jet stream and key/value
