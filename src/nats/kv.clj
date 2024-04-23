@@ -1,23 +1,81 @@
 (ns nats.kv
-  (:require [nats.core :as nats]
+  (:require [clojure.set :as set]
+            [nats.core :as nats]
+            [nats.message :as message]
             [nats.stream :as stream])
+  (:refer-clojure :exclude [get])
   (:import (io.nats.client JetStreamOptions JetStreamOptions$Builder
                            KeyValueOptions KeyValueOptions$Builder)
            (io.nats.client.api External External$Builder
                                KeyValueConfiguration KeyValueConfiguration$Builder
-                               KeyValueStatus
-                               Mirror Mirror$Builder
+                               KeyValueEntry KeyValueOperation KeyValueStatus
+                               MessageInfo Mirror Mirror$Builder
                                Placement Placement$Builder
                                Republish Republish$Builder
                                Source Source$Builder
                                SubjectTransform SubjectTransform$Builder)
+           (io.nats.client.impl CljNatsKeyValue)
+           (io.nats.client.support NatsKeyValueUtil)
            (java.time Duration)
            (java.util ArrayList)))
 
+;; Enums
+
+(def operations
+  "Available key value operations:
+
+   - `:nats.kv-operation/delete`
+   - `:nats.kv-operation/purge`
+   - `:nats.kv-operation/put`"
+  {:nats.kv-operation/delete KeyValueOperation/DELETE
+   :nats.kv-operation/purge KeyValueOperation/PURGE
+   :nats.kv-operation/put KeyValueOperation/PUT})
+
+(def ^:no-doc operation->k (set/map-invert operations))
+
 ;; Map data classes to maps
 
+(defn ^:no-doc key-value-configuration->map [^KeyValueConfiguration config]
+  (let [mirror (some-> (.getMirror config) stream/source-base->map)
+        republish (some-> (.getRepublish config) stream/republish->map)
+        sources (set (for [source (.getSources config)]
+                       (stream/source-base->map source)))]
+    (cond-> {::max-history-per-key (.getMaxHistoryPerKey config)
+             ::max-value-size (.getMaxValueSize config)}
+      mirror (assoc ::mirror mirror)
+      republish (assoc ::republish republish)
+      (seq sources) (assoc ::sources sources))))
+
 (defn ^:no-doc key-value-status->map [^KeyValueStatus status]
-  {})
+  (let [metadata (some->> (.getMetadata status) (into {}))
+        placement (some-> (.getPlacement status) stream/placement->map)
+        republish (some-> (.getRepublish status) stream/republish->map)]
+    (cond-> {::backing-store (.getBackingStore status)
+             ::stream-info (stream/stream-info->map (.getBackingStreamInfo status))
+             ::bucket-name (.getBucketName status)
+             ::byte-count (.getByteCount status)
+             ::configuration (key-value-configuration->map (.getConfiguration status))
+             ::description (.getDescription status)
+             ::entry-count (.getEntryCount status)
+             ::max-bucket-size (.getMaxBucketSize status)
+             ::max-history-per-key (.getMaxHistoryPerKey status)
+             ::max-value-size (.getMaxValueSize status)
+             ::replicas (.getReplicas status)
+             ::storage-type (stream/storage-type->k (.getStorageType status))
+             ::ttl (.getTtl status)
+             ::compressed? (.isCompressed status)}
+      metadata (assoc ::metadata metadata)
+      placement (assoc ::placement placement)
+      republish (assoc ::republish republish))))
+
+(defn message-info->key-value-entry [bucket k ^MessageInfo msg]
+  (let [headers (.getHeaders msg)]
+    {:nats.kv.entry/bucket bucket
+     :nats.kv.entry/key k
+     :nats.kv.entry/created-at (.toInstant (.getTime msg))
+     :nats.kv.entry/operation (operation->k (NatsKeyValueUtil/getOperation headers))
+     :nats.kv.entry/revision (.getSeq msg)
+     :nats.kv.entry/value (message/get-message-data (message/headers->map headers) (.getData msg))}))
 
 ;; Build options
 
@@ -133,15 +191,23 @@
                 ttl))
     :then (.build)))
 
-;; Helper function
+;; Helper functions
 
-(defn ^:no-doc kv-management [nats-conn]
-  (let [{:keys [kvm conn key-value-options]} @nats-conn]
-    (when-not kvm
+(defn ^:no-doc bucket-management [nats-conn]
+  (let [{:keys [kvbm conn key-value-options]} @nats-conn]
+    (when-not kvbm
       (->> (build-kvo-options key-value-options)
            (.keyValueManagement conn)
-           (swap! nats-conn assoc :kvm))))
-  (:kvm @nats-conn))
+           (swap! nats-conn assoc :kvbm))))
+  (:kvbm @nats-conn))
+
+(defn ^:no-doc kv-management [nats-conn bucket-name]
+  (let [{:keys [kvm conn key-value-options]} @nats-conn]
+    (when-not (get-in kvm [bucket-name])
+      (->> (build-kvo-options key-value-options)
+           (CljNatsKeyValue/create conn bucket-name)
+           (swap! nats-conn assoc-in [:kvm bucket-name]))))
+  (get-in @nats-conn [:kvm bucket-name]))
 
 ;; Public API
 
@@ -162,7 +228,7 @@
         (assoc :key-value-options key-value-options)
         atom)))
 
-(defn ^{:style/indent 1 :export} create-bucket
+(defn ^{:style/indent 1 :export true} create-bucket
   "Create a key/value bucket. `config` is a map of:
 
    - `:nats.kv/name`
@@ -199,29 +265,81 @@
    - `:nats.republish/headers-only?`
    - `:nats.republish/source`"
   [conn config]
-  (-> (kv-management conn)
+  (-> (bucket-management conn)
       (.create (build-key-value-options config))
-      key-value-status->map))
+      key-value-status->map
+      ))
 
 (defn ^:export update-bucket
   "Update a key/value bucket. See `create-bucket` for `config` details."
   [conn config]
-  (-> (kv-management conn)
+  (-> (bucket-management conn)
       (.update (build-key-value-options config))
       key-value-status->map))
 
 (defn ^:export delete-bucket
   "Delete a key/value bucket"
   [conn bucket-name]
-  (.delete (kv-management conn) bucket-name))
+  (.delete (bucket-management conn) bucket-name))
 
 (defn ^:export get-bucket-status
   [conn bucket-name]
-  (-> (kv-management conn)
+  (-> (bucket-management conn)
       (.getStatus bucket-name)
       key-value-status->map))
 
 (defn ^:export get-bucket-statuses [conn]
-  (->> (.getStatuses (kv-management conn))
+  (->> (.getStatuses (bucket-management conn))
        (map key-value-status->map)
        set))
+
+(defn ^:export put
+  "Put a key in the bucket. `v` can be either a byte array or any serializable
+  Clojure value.
+
+  Supports two arities:
+
+  ```
+  (put conn :bucket/key v)
+  (put conn \"bucket\" \"key\" v)
+  ```"
+  ([conn k v]
+   (put conn (namespace k) (name k) v))
+  ([conn bucket-name k v]
+   (let [{:keys [kind data]} (message/get-message-body v)
+         headers (message/set-content-type nil kind)]
+     (-> (kv-management conn bucket-name)
+         (.put k data (some-> headers message/map->Headers))))))
+
+(defn ^:export get
+  ([conn k]
+   (get conn (namespace k) (name k) nil))
+  ([conn k rev]
+   (get conn (namespace k) (name k) rev))
+  ([conn bucket-name k rev]
+   (when-let [message-info (if rev
+                             (.getMessage (kv-management conn bucket-name) k rev)
+                             (.getMessage (kv-management conn bucket-name) k))]
+     (let [entry (message-info->key-value-entry bucket-name k message-info)]
+       (when (= :nats.kv-operation/put (:nats.kv.entry/operation entry))
+         entry)))))
+
+(defn ^:export get-value
+  ([conn k]
+   (get-value conn (namespace k) (name k) nil))
+  ([conn k rev]
+   (get-value conn (namespace k) (name k) rev))
+  ([conn bucket-name k rev]
+   (:nats.kv.entry/value (get conn bucket-name k rev))))
+
+(defn ^:export update [conn bucket-name k v rev])
+
+(defn ^:export delete [conn bucket-name k & [expected-rev]])
+
+(defn ^:export get-history [conn bucket-name k])
+
+(defn ^:export get-keys [conn bucket-name k])
+
+(defn ^:export purge [conn bucket-name k & [expected-rev]])
+
+(defn ^:export purge-deletes [conn bucket-name & [opt]])

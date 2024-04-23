@@ -4,7 +4,8 @@
            (io.nats.client.api MessageInfo PublishAck)
            (io.nats.client.impl AckType Headers NatsJetStreamMetaData NatsMessage
                                 NatsMessage$Builder)
-           (io.nats.client.support Status)))
+           (io.nats.client.support Status)
+           (java.nio.charset StandardCharsets)))
 
 (def ack-types
   {:nats.ack-type/ack AckType/AckAck
@@ -30,28 +31,36 @@
            [k (.get headers k)])
          (into {}))))
 
-(defn ^:no-doc get-message-kind [headers data]
-  (cond
-    (or (get headers "content-type") (bytes? data))
-    ::bytes
+(defn ^:no-doc get-message-body
+  ([data]
+   (get-message-body nil data))
+  ([headers data]
+   (cond
+     (or (get headers "content-type") (bytes? data))
+     {:kind ::bytes
+      :data data}
 
-    (string? data)
-    ::string
+     (string? data)
+     {:kind ::string
+      :data (.getBytes data StandardCharsets/UTF_8)}
 
-    :else
-    ::edn))
+     :else
+     {:kind ::edn
+      :data (.getBytes (pr-str data) StandardCharsets/UTF_8)})))
+
+(defn set-content-type [headers kind]
+  (cond-> headers
+    (= ::string kind) (assoc "content-type" ["text/plain"])
+    (= ::edn kind) (assoc "content-type" ["application/edn"])))
 
 (defn build-message [{::keys [subject headers data reply-to]}]
-  (let [kind (get-message-kind headers data)
-        headers (cond-> headers
-                  (= ::string kind) (assoc "content-type" ["text/plain"])
-                  (= ::edn kind) (assoc "content-type" ["application/edn"]))]
+  (let [{:keys [kind data]} (get-message-body headers data)
+        headers (set-content-type headers kind)]
     (cond-> ^NatsMessage$Builder (NatsMessage/builder)
       subject (.subject subject)
       reply-to (.replyTo reply-to)
       headers (.headers (map->Headers headers))
-      data (.data (cond-> data
-                    (= ::edn kind) pr-str))
+      data (.data data)
       :always (.build))))
 
 (defn ^:no-doc bytes->edn [data]

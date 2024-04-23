@@ -1,6 +1,7 @@
 (ns nats.dev
   (:require [nats.consumer :as consumer]
             [nats.core :as nats]
+            [nats.kv :as kv]
             [nats.message :as message]
             [nats.stream :as stream]))
 
@@ -13,6 +14,8 @@
 (comment
   (set! *print-namespace-maps* false)
   (def conn (nats/connect "nats://localhost:4222"))
+
+  (stream/get-streams conn {:subject-filter "m2n2.export"})
 
   (nats/publish conn
     {::message/subject "chat.general.christian"
@@ -77,5 +80,16 @@
 
   (with-open [subscription (consumer/subscribe conn "other-stream" "test-consumer")]
     (consumer/pull-message subscription 1000))
+
+  (def res (kv/create-bucket conn {:nats.kv/name "kv-bucket"}))
+
+  (kv/put conn "kv-bucket" "key1" {:object "Business"})
+
+  (kv/get conn "kv-bucket" "key1")
+  (kv/get-value conn :kv-bucket/key1)
+
+  (kv/kv-management conn "kv-bucket")
+
+  (.getPlacement res)
 
   )
