@@ -59,7 +59,7 @@
 ;; Map data classes to maps
 
 (defn ^:no-doc subject-transform->map [^SubjectTransform transform]
-  {:nats.subject-transform/destination (.getDestionation transform)
+  {:nats.subject-transform/destination (.getDestination transform)
    :nats.subject-transform/source (.getSource transform)})
 
 (defn ^:no-doc external->map [^External external]
@@ -88,7 +88,7 @@
    :nats.placement/tags (seq (.getTags placement))})
 
 (defn ^:no-doc republish->map [^Republish republish]
-  {:nats.publish/destination (.getDestionation republish)
+  {:nats.publish/destination (.getDestination republish)
    :nats.publish/source (.getSource republish)
    :nats.publish/headers-only? (.isHeadersOnly republish)})
 
