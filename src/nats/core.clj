@@ -63,7 +63,7 @@
   [conn message]
   (assert (not (nil? (::message/subject message))) "Can't publish without data")
   (assert (not (nil? (::message/data message))) "Can't publish nil data")
-  (->> (nats.message/build-message message)
+  (->> (message/build-message message)
        (.publish (get-connection conn))
        message/publish-ack->map))
 
@@ -98,7 +98,7 @@
   (assert (not (nil? (::message/subject message))) "Can't publish without data")
   (assert (not (nil? (::message/data message))) "Can't publish nil data")
   (future
-    (->> (nats.message/build-message (dissoc message :nats.message/reply-to))
+    (->> (message/build-message (dissoc message :nats.message/reply-to))
          (.request (get-connection conn))
          deref
          message/message->map)))
