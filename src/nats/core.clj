@@ -4,6 +4,8 @@
   (:import (io.nats.client Nats Subscription)
            (java.time ZoneId)))
 
+(def ^:no-doc connections (atom {}))
+
 (def ^:no-doc default-tz
   "The Java SDK uses ZonedDateTime for every instant and defaults the time zone to
    GMT. All the NATS times are instants in time, so Instant is the appropriate
@@ -39,15 +41,20 @@
   management, or use `nats.stream/configure` and `nats.kv/configure`
   respectively later."
   [uri & [{:keys [jet-stream-options key-value-options]}]]
-  (atom {:conn (Nats/connect uri)
-         :jet-stream-options jet-stream-options
-         :key-value-options key-value-options}))
+  (let [conn (Nats/connect uri)
+        clj-conn (atom {:conn conn
+                        :jet-stream-options jet-stream-options
+                        :key-value-options key-value-options})]
+    (swap! connections assoc conn clj-conn)
+    clj-conn))
 
 (defn ^:no-doc get-connection [conn]
   (:conn @conn))
 
 (defn ^:export close [conn]
-  (.close (get-connection conn)))
+  (let [jconn (get-connection conn)]
+    (swap! connections dissoc jconn)
+    (.close jconn)))
 
 (defn ^{:style/indent 1 :export true} publish
   "Publish a message. Performs no publish acking; do not use for publishing to a
