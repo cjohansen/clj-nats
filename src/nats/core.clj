@@ -47,12 +47,17 @@
     (boolean (some #(covers? (str/split % #"\.") s-pieces) patterns))))
 
 (defn ^:export create-file-auth-handler
+  "Creates an `io.nats.client.AuthHandler` for a credentials file, or a jwt-file
+  and a nkey-file. The result can be passed as `:nats.core/auth-handler` in
+  `nats.core/connect`."
   ([credentials-file-path]
    (Nats/credentials credentials-file-path))
   ([jwt-file-path nkey-file-path]
    (Nats/credentials jwt-file-path nkey-file-path)))
 
 (defn ^:export create-static-auth-handler
+  "Creates an `io.nats.client.AuthHandler` for a credential string, or a pair of JWT and nkey strings.
+  The result can be passed as `:nats.core/auth-handler` in `nats.core/connect`."
   ([credentials]
    (Nats/credentials credentials))
   ([jwt nkey]
@@ -430,7 +435,7 @@
   `server-url-or-options` is either the NATS server URL as a string, or a map
   of the following keys:
 
-  - `:nats.core/auth-handler` a `AuthHandler` instance
+  - `:nats.core/auth-handler` a `AuthHandler` instance, see `create-file-auth-handler` and `create-static-auth-handler`.
   - `:nats.core/buffer-size`
   - `:nats.core/client-side-limit-checks`
   - `:nats.core/connection-listener` A function that receives connection events.

@@ -15,7 +15,7 @@ The current jnats version is `2.19.0`.
 ## Status
 
 The API is still under development and is subject to change. Once set, it will
-remain backwards compatible. An official release is expected in April 2024.
+remain backwards compatible. An official release is expected in August 2024.
 Until then, use at risk of breaking changes.
 
 - [x] PubSub
@@ -70,6 +70,8 @@ The goal is to make it easy to translate CLI examples to clj-nats usage.
 
 ## Usage
 
+[Full API docs on cljdoc.org](https://cljdoc.org/d/no.cjohansen/clj-nats/).
+
 Create a connection:
 
 ```clj
@@ -77,6 +79,8 @@ Create a connection:
 
 (def conn (nats/connect "nats://localhost:4222"))
 ```
+
+See also: [authenticated connections](#auth).
 
 Publish a message (see below for publishing to streams):
 
@@ -220,6 +224,60 @@ Get information from the server:
 
 (stream/get-streams conn)
 (stream/get-account-statistics conn)
+```
+
+<a id="auth"></a>
+## Authenticated connections
+
+To connect using credentials, pass a map to `nats.core/connect`:
+
+```clj
+(require '[nats.core :as nats])
+(import 'javax.net.ssl.SSLContext)
+
+(nats/connect
+ {::nats/server-url "nats://your.nats.server:4222"  ;; 1
+  ::nats/connection-name "myapp"                    ;; 2
+  ::nats/credentials-file-path "path/to/file.creds" ;; 3
+  ::nats/ssl-context (SSLContext/getDefault)})      ;; 4
+```
+
+1. Your NATS server URL
+2. The connection name is used for metrics. It's not strictly necessary, but
+   suggested for production use.
+3. The path to your credentials file. See below for alternatives.
+4. When using the `nats://` protocol and a credentials file, you need to specify
+   an SSL context. Alternatively you can use the `tls://` protocol and skip the
+   SSL context.
+
+### Alternatives to credential files
+
+If you don't want to bundle a file with your app you can provide credentials (or
+JWT/nkey) as strings:
+
+```clj
+(require '[nats.core :as nats])
+
+;; Credentials
+(nats/connect
+ {::nats/server-url "tls://your.nats.server:4222"
+  ::nats/connection-name "myapp"
+  ::nats/auth-handler
+  (nats/create-static-auth-handler "...")})
+
+;; JWT + nkey
+(nats/connect
+ {::nats/server-url "tls://your.nats.server:4222"
+  ::nats/connection-name "myapp"
+  ::nats/auth-handler
+  (nats/create-static-auth-handler "...jwt" "...nkey")})
+
+;; JWT file and nkey file
+(nats/connect
+ {::nats/server-url "tls://your.nats.server:4222"
+  ::nats/connection-name "myapp"
+  ::nats/auth-handler
+  (nats/create-file-auth-handler "path/to/jwt.file" "path/to/nkey.file")})
 ```
 
 ## Tests
