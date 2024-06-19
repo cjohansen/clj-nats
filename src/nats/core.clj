@@ -2,10 +2,16 @@
   (:require [clojure.set :as set]
             [clojure.string :as str]
             [nats.message :as message])
-  (:import (io.nats.client Nats
+  (:import (io.nats.client ConnectionListener
+                           ConnectionListener$Events
                            ErrorListener
+                           Nats
+                           Options
+                           Options$Builder
+                           ReconnectDelayHandler
                            StatisticsCollector
-                           Subscription)
+                           Subscription
+                           TimeTraceLogger)
            (java.time ZoneId)))
 
 (def ^:no-doc connections (atom {}))
@@ -39,6 +45,18 @@
 (defn ^:no-doc covers-subject? [patterns subject]
   (let [s-pieces (str/split subject #"\.")]
     (boolean (some #(covers? (str/split % #"\.") s-pieces) patterns))))
+
+(defn ^:export create-file-auth-handler
+  ([credentials-file-path]
+   (Nats/credentials credentials-file-path))
+  ([jwt-file-path nkey-file-path]
+   (Nats/credentials jwt-file-path nkey-file-path)))
+
+(defn ^:export create-static-auth-handler
+  ([credentials]
+   (Nats/credentials credentials))
+  ([jwt nkey]
+   (Nats/credentials jwt nkey)))
 
 (defn ^:export create-error-listener
   "Create an `io.nats.client.ErrorListener` instance. Takes the following
@@ -236,12 +254,254 @@
       (when (ifn? set-advanced-tracking)
         (set-advanced-tracking track-advance)))))
 
+(def connection-events
+  "Available events:
+
+   - `:nats.connection.event/closed`
+   - `:nats.connection.event/connected`
+   - `:nats.connection.event/disconnected`
+   - `:nats.connection.event/discovered-servers`
+   - `:nats.connection.event/lame-duck`
+   - `:nats.connection.event/reconnected`
+   - `:nats.connection.event/resubscribed`"
+  {:nats.connection.event/closed ConnectionListener$Events/CLOSED
+   :nats.connection.event/connected ConnectionListener$Events/CONNECTED
+   :nats.connection.event/disconnected ConnectionListener$Events/DISCONNECTED
+   :nats.connection.event/discovered-servers ConnectionListener$Events/DISCOVERED_SERVERS
+   :nats.connection.event/lame-duck ConnectionListener$Events/LAME_DUCK
+   :nats.connection.event/reconnected ConnectionListener$Events/RECONNECTED
+   :nats.connection.event/resubscribed ConnectionListener$Events/RESUBSCRIBED})
+
+(def ^:no-doc connection-event->k (set/map-invert connection-events))
+
+(defn build-options
+  [{::keys [auth-handler ;; AuthHandler
+            buffer-size
+            client-side-limit-checks
+            connection-listener ;; fn
+            connection-name
+            connection-timeout ;; Duration / ms
+            credentials
+            credentials-file-path
+            data-port-type
+            discard-messages-when-outgoing-queue-full?
+            error-listener ;; create-error-listener
+            executor-service ;; java.util.concurrent.ExecutorService
+            get-wait-time ;; fn https://javadoc.io/static/io.nats/jnats/2.19.0/io/nats/client/ReconnectDelayHandler.html#getWaitTime-long-
+            http-request-interceptor ;; https://javadoc.io/static/io.nats/jnats/2.19.0/io/nats/client/Options.Builder.html#httpRequestInterceptor-java.util.function.Consumer-
+            http-request-interceptors ;; https://javadoc.io/static/io.nats/jnats/2.19.0/io/nats/client/Options.Builder.html#httpRequestInterceptors-java.util.Collection-
+            ignore-discovered-servers?
+            inbox-prefix
+            jwt
+            jwt-file-path
+            keystore-password ;; char[]
+            keystore-path
+            max-control-line
+            max-messages-in-outgoing-queue
+            max-pings-out
+            max-reconnects
+            nkey
+            nkey-file-path
+            no-echo?
+            no-headers?
+            no-no-responders?
+            no-randomize?
+            no-reconnect?
+            no-resolve-hostnames?
+            old-request-style?
+            open-tls?
+            pedantic?
+            ping-interval ;; Duration / ms
+            reconnect-buffer-size
+            reconnect-jitter ;; Duration
+            reconnect-jitter-tls ;; Duration
+            reconnect-wait ;; Duration
+            report-no-responders?
+            request-cleanup-interval ;; Duration
+            secure?
+            server-pool ;; https://javadoc.io/static/io.nats/jnats/2.19.0/io/nats/client/ServerPool.html
+            server-url
+            server-urls
+            ssl-context ;; javax.net.ssl.SSLContext
+            socket-so-linger ;; "SO LINGER" in seconds
+            socket-write-timeout ;; Duration / ms
+            statistics-collector
+            utf8-subjects?
+            tls-algorithm
+            tls-first?
+            token ;; char[]
+            trace-connection?
+            truststore-password ;; char[]
+            truststore-path
+            advanced-stats?
+            use-dispatcher-with-executor?
+            user-name ;; char[] / String
+            password ;; char[] / String
+            time-trace
+            use-timeout-exception?
+            verbose?]}]
+  (cond-> ^Options$Builder (Options/builder)
+    auth-handler (.authHandler auth-handler)
+    (and jwt nkey) (.authHandler (create-static-auth-handler jwt nkey))
+    credentials (.authHandler (create-static-auth-handler credentials))
+    (and jwt-file-path nkey-file-path) (.authHandler (Nats/credentials jwt-file-path nkey-file-path))
+    buffer-size (.bufferSize buffer-size)
+    client-side-limit-checks (.clientSideLimitChecks client-side-limit-checks)
+    connection-listener (.connectionListener
+                         (reify ConnectionListener
+                           (connectionEvent [_this conn event]
+                             (connection-listener (get @connections conn) (connection-event->k event)))))
+    connection-name (.connectionName connection-name)
+    connection-timeout (.connectionTimeout connection-timeout)
+    credentials-file-path (.credentialPath credentials-file-path)
+    data-port-type (.dataPortType data-port-type)
+    discard-messages-when-outgoing-queue-full? (.discardMessagesWhenOutgoingQueueFull)
+    ;; DispatcherFactory is strongly marked as "purely internal", so the builder
+    ;; method .dispatcherFactory isn't exposed, for now anyway.
+    error-listener (.errorListener error-listener)
+    executor-service (.executor executor-service)
+    http-request-interceptor (.httpRequestInterceptor http-request-interceptor)
+    http-request-interceptors (.httpRequestInterceptors http-request-interceptors)
+    ignore-discovered-servers? (.ignoreDiscoveredServers)
+    inbox-prefix (.inboxPrefix inbox-prefix)
+    keystore-password (.keystorePassword keystore-password)
+    keystore-path (.keystorePath keystore-path)
+    max-control-line (.maxControlLine max-control-line)
+    max-messages-in-outgoing-queue (.maxMessagesInOutgoingQueue max-messages-in-outgoing-queue)
+    max-pings-out (.maxPingsOut max-pings-out)
+    max-reconnects (.maxReconnects max-reconnects)
+    no-echo? (.noEcho)
+    no-headers? (.noHeaders)
+    no-no-responders? (.noNoResponders)
+    no-randomize? (.noRandomize)
+    no-reconnect? (.noReconnect)
+    no-resolve-hostnames? (.noResolveHostnames)
+    old-request-style? (.oldRequestStyle)
+    open-tls? (.opentls)
+    pedantic? (.pedantic)
+    ping-interval (.pingInterval ping-interval)
+    ;; It's not at all clear what the .properties method on the builder is for.
+    ;; It might be an alternative way to initialize the "Options" class - if so,
+    ;; it is unlikely to be useful to Clojure programmers. Until I can figure
+    ;; out what it does and if it's relevant it is not exposed.
+    reconnect-buffer-size (.reconnectBufferSize reconnect-buffer-size)
+    get-wait-time (.reconnectDelayHandler
+                   (reify ReconnectDelayHandler
+                     (getWaitTime [_this total-tries]
+                       (get-wait-time total-tries))))
+    reconnect-jitter (.reconnectJitter reconnect-jitter)
+    reconnect-jitter-tls (.reconnectJitterTls reconnect-jitter-tls)
+    reconnect-wait (.reconnectWait reconnect-wait)
+    report-no-responders? (.reportNoResponders report-no-responders?)
+    request-cleanup-interval (.requestCleanupInterval request-cleanup-interval)
+    secure? (.secure)
+    server-url (.server server-url)
+    server-pool (.serverPool server-pool)
+    server-urls (.servers server-urls)
+    socket-so-linger (.socketSoLinger socket-so-linger)
+    socket-write-timeout (.socketWriteTimeout socket-write-timeout)
+    ssl-context (.sslContext ssl-context)
+    ;; Because the SSLContextFactory interface is in the "impl" namespace, we'll
+    ;; leave .sslContextFactory unexposed until someone complains.
+    statistics-collector (.statisticsCollector statistics-collector)
+    utf8-subjects? (.supportUTF8Subjects)
+    time-trace (.timeTraceLogger
+                (reify TimeTraceLogger
+                  (trace [_this fmt args]
+                    (apply time-trace fmt args))))
+    tls-algorithm (.tlsAlgorithm tls-algorithm)
+    tls-first? (.tlsFirst)
+    token (.token token)
+    trace-connection? (.traceConnection)
+    truststore-password (.truststorePassword truststore-password)
+    truststore-path (.truststorePath truststore-path)
+    advanced-stats? (.turnOnAdvancedStats)
+    use-dispatcher-with-executor? (.useDispatcherWithExecutor)
+    (and user-name password) (.userInfo user-name password)
+    use-timeout-exception? (.useTimeoutException)
+    verbose? (.verbose)
+    :always (.build)))
+
 (defn ^:export connect
   "Connect to the NATS server. Optionally configure jet stream and key/value
   management, or use `nats.stream/configure` and `nats.kv/configure`
-  respectively later."
-  [uri & [{:keys [jet-stream-options key-value-options]}]]
-  (let [conn (Nats/connect uri)
+  respectively later.
+
+  `server-url-or-options` is either the NATS server URL as a string, or a map
+  of the following keys:
+
+  - `auth-handler` a `AuthHandler` instance
+  - `buffer-size`
+  - `client-side-limit-checks`
+  - `connection-listener` A function that receives connection events.
+                          Will be passed the clj-nats connection and an event keyword.
+  - `connection-name`
+  - `connection-timeout` java.time.Duration or number of milliseconds
+  - `credentials`
+  - `credentials-file-path`
+  - `data-port-type`
+  - `discard-messages-when-outgoing-queue-full?`
+  - `error-listener` See `create-error-listener`
+  - `executor-service` A `java.util.concurrent.ExecutorService` instance
+  - `get-wait-time` A function that will be called with one argument, the number of connection
+                    attempts, and that returns a `java.time.Duration` dictating how long to
+                    wait before attempting another reconnect.
+  - `http-request-interceptor` See https://javadoc.io/static/io.nats/jnats/2.19.0/io/nats/client/Options.Builder.html#httpRequestInterceptor-java.util.function.Consumer-
+  - `http-request-interceptors` See https://javadoc.io/static/io.nats/jnats/2.19.0/io/nats/client/Options.Builder.html#httpRequestInterceptors-java.util.Collection-
+  - `ignore-discovered-servers?`
+  - `inbox-prefix`
+  - `jwt`
+  - `jwt-file-path`
+  - `keystore-password` A character array
+  - `keystore-path`
+  - `max-control-line`
+  - `max-messages-in-outgoing-queue`
+  - `max-pings-out`
+  - `max-reconnects`
+  - `nkey`
+  - `nkey-file-path`
+  - `no-echo?`
+  - `no-headers?`
+  - `no-no-responders?`
+  - `no-randomize?`
+  - `no-reconnect?`
+  - `no-resolve-hostnames?`
+  - `old-request-style?`
+  - `open-tls?`
+  - `pedantic?`
+  - `ping-interval` A `java.time.Duration` or a number of milliseconds
+  - `reconnect-buffer-size`
+  - `reconnect-jitter` `java.time.Duration`
+  - `reconnect-jitter-tls` ;; `java.time.Duration`
+  - `reconnect-wait` ;; `java.time.Duration`
+  - `report-no-responders?`
+  - `request-cleanup-interval` ;; `java.time.Duration`
+  - `secure?`
+  - `server-pool` See https://javadoc.io/static/io.nats/jnats/2.19.0/io/nats/client/ServerPool.html
+  - `server-url`
+  - `server-urls`
+  - `ssl-context` A `javax.net.ssl.SSLContext`
+  - `socket-so-linger` SO LINGER in seconds
+  - `socket-write-timeout` A `java.time.Duration` or a number of milliseconds
+  - `statistics-collector` See `create-statistics-collector`
+  - `utf8-subjects?`
+  - `tls-algorithm`
+  - `tls-first?`
+  - `token` A character array
+  - `trace-connection?`
+  - `truststore-password` A character array
+  - `truststore-path`
+  - `advanced-stats?`
+  - `use-dispatcher-with-executor?`
+  - `user-name` Character array or String. Must be same type as `:password`
+  - `password` Character array or String. Must be same type as `:user-name`
+  - `time-trace`
+  - `use-timeout-exception?`
+  - `verbose?`"
+  [server-url-or-options & [{:keys [jet-stream-options key-value-options]}]]
+  (let [conn (Nats/connect (cond-> server-url-or-options
+                             (not (string? server-url-or-options))
+                             build-options))
         clj-conn (atom {:conn conn
                         :jet-stream-options jet-stream-options
                         :key-value-options key-value-options})]
