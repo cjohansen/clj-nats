@@ -1,7 +1,10 @@
 (ns nats.core
-  (:require [clojure.string :as str]
+  (:require [clojure.set :as set]
+            [clojure.string :as str]
             [nats.message :as message])
-  (:import (io.nats.client Nats Subscription)
+  (:import (io.nats.client Nats
+                           ErrorListener
+                           Subscription)
            (java.time ZoneId)))
 
 (def ^:no-doc connections (atom {}))
@@ -35,6 +38,77 @@
 (defn ^:no-doc covers-subject? [patterns subject]
   (let [s-pieces (str/split subject #"\.")]
     (boolean (some #(covers? (str/split % #"\.") s-pieces) patterns))))
+
+(defn ^:export create-error-listener
+  "Create an `io.nats.client.ErrorListener` instance. Takes the following
+  functions:
+
+  - `:error-occurred` `(fn [conn error])`
+  - `:exception-occurred` `(fn [conn exception])`
+  - `:flow-control-processed`  `(fn [conn subscription subject source])`
+  - `:heartbeat-alarm`  `(fn [conn subscription last-stream-seq last-consumer-seq])`
+  - `:message-discarded`  `(fn [conn message])`
+  - `:pull-status-error`  `(fn [conn subscription status])`
+  - `:pull-status-warning`  `(fn [conn subscription status])`
+  - `:slow-consumer-detected`  `(fn [conn consumer])`
+  - `:socket-write-timeout`  `(fn [conn])`
+  - `:supply-message`  `(fn [label conn consumer sub pairs])`
+  - `:unhandled-status`  `(fn [conn subscription status])`"
+  [{:keys [error-occurred
+           exception-occurred
+           flow-control-processed
+           heartbeat-alarm
+           message-discarded
+           pull-status-error
+           pull-status-warning
+           slow-consumer-detected
+           socket-write-timeout
+           supply-message
+           unhandled-status]}]
+  (reify ErrorListener
+    (errorOccurred [_this conn error]
+      (when (ifn? error-occurred)
+        (error-occurred (get @connections conn) error)))
+
+    (exceptionOccurred [_this conn exception]
+      (when (ifn? exception-occurred)
+        (exception-occurred (get @connections conn) exception)))
+
+    (flowControlProcessed [_this conn subscription subject source]
+      (when (ifn? flow-control-processed)
+        (flow-control-processed (get @connections conn) subscription subject source)))
+
+    (heartbeatAlarm [_this conn subscription last-stream-seq last-consumer-seq]
+      (when (ifn? heartbeat-alarm)
+        (heartbeat-alarm (get @connections conn) subscription last-stream-seq last-consumer-seq)))
+
+    (messageDiscarded [_this conn message]
+      (when (ifn? message-discarded)
+        (message-discarded (get @connections conn) (message/message->map message))))
+
+    (pullStatusError [_this conn subscription status]
+      (when (ifn? pull-status-error)
+        (pull-status-error (get @connections conn) subscription (message/status->map status))))
+
+    (pullStatusWarning [_this conn subscription status]
+      (when (ifn? pull-status-warning)
+        (pull-status-warning (get @connections conn) subscription (message/status->map status))))
+
+    (slowConsumerDetected [_this conn consumer]
+      (when (ifn? slow-consumer-detected)
+        (slow-consumer-detected (get @connections conn) consumer)))
+
+    (socketWriteTimeout [_this conn]
+      (when (ifn? socket-write-timeout)
+        (socket-write-timeout (get @connections conn))))
+
+    (supplyMessage [_this label conn consumer sub pairs]
+      (when (ifn? supply-message)
+        (supply-message label conn consumer sub pairs)))
+
+    (unhandledStatus [_this conn subscription status]
+      (when (ifn? unhandled-status)
+        (unhandled-status (get @connections conn) subscription (message/status->map status))))))
 
 (defn ^:export connect
   "Connect to the NATS server. Optionally configure jet stream and key/value
