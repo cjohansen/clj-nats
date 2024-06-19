@@ -4,6 +4,7 @@
             [nats.message :as message])
   (:import (io.nats.client Nats
                            ErrorListener
+                           StatisticsCollector
                            Subscription)
            (java.time ZoneId)))
 
@@ -109,6 +110,131 @@
     (unhandledStatus [_this conn subscription status]
       (when (ifn? unhandled-status)
         (unhandled-status (get @connections conn) subscription (message/status->map status))))))
+
+(defn ^:export create-statistics-collector
+  "Create a `io.nats.client.StatisticsCollector` instance. Takes a map of
+  functions:
+
+  - `decrement-outstanding-requests` `(fn [])`
+  - `increment-dropped-count` `(fn [])`
+  - `increment-duplicate-replies-received` `(fn [])`
+  - `increment-err-count` `(fn [])`
+  - `increment-exception-count` `(fn [])`
+  - `increment-flush-counter` `(fn [])`
+  - `increment-in-bytes` `(fn [])`
+  - `increment-in-msgs` `(fn [])`
+  - `increment-ok-count` `(fn [])`
+  - `increment-orphan-replies-received` `(fn [])`
+  - `increment-out-bytes` `(fn [byte-count])`
+  - `increment-out-msgs` `(fn [])`
+  - `increment-outstanding-requests` `(fn [])`
+  - `increment-ping-count` `(fn [])`
+  - `increment-reconnects` `(fn [])`
+  - `increment-replies-received` `(fn [])`
+  - `increment-requests-sent` `(fn [])`
+  - `register-read` `(fn [byte-count])`
+  - `register-write` `(fn [byte-count])`
+  - `set-advanced-tracking` `(fn [track-advance])`"
+  [{:keys [decrement-outstanding-requests
+           increment-dropped-count
+           increment-duplicate-replies-received
+           increment-err-count
+           increment-exception-count
+           increment-flush-counter
+           increment-in-bytes
+           increment-in-msgs
+           increment-ok-count
+           increment-orphan-replies-received
+           increment-out-bytes
+           increment-out-msgs
+           increment-outstanding-requests
+           increment-ping-count
+           increment-reconnects
+           increment-replies-received
+           increment-requests-sent
+           register-read
+           register-write
+           set-advanced-tracking]}]
+  (reify StatisticsCollector
+    (decrementOutstandingRequests [_this]
+      (when (ifn? decrement-outstanding-requests)
+        (decrement-outstanding-requests)))
+
+    (incrementDroppedCount [_this]
+      (when (ifn? increment-dropped-count)
+        (increment-dropped-count)))
+
+    (incrementDuplicateRepliesReceived [_this]
+      (when (ifn? increment-duplicate-replies-received)
+        (increment-duplicate-replies-received)))
+
+    (incrementErrCount [_this]
+      (when (ifn? increment-err-count)
+        (increment-err-count)))
+
+    (incrementExceptionCount [_this]
+      (when (ifn? increment-exception-count)
+        (increment-exception-count)))
+
+    (incrementFlushCounter [_this]
+      (when (ifn? increment-flush-counter)
+        (increment-flush-counter)))
+
+    (incrementInBytes [_this bs]
+      (when (ifn? increment-in-bytes)
+        (increment-in-bytes bs)))
+
+    (incrementInMsgs [_this]
+      (when (ifn? increment-in-msgs)
+        (increment-in-msgs)))
+
+    (incrementOkCount [_this]
+      (when (ifn? increment-ok-count)
+        (increment-ok-count)))
+
+    (incrementOrphanRepliesReceived [_this]
+      (when (ifn? increment-orphan-replies-received)
+        (increment-orphan-replies-received)))
+
+    (incrementOutBytes [_this byte-count]
+      (when (ifn? increment-out-bytes)
+        (increment-out-bytes byte-count)))
+
+    (incrementOutMsgs [_this]
+      (when (ifn? increment-out-msgs)
+        (increment-out-msgs)))
+
+    (incrementOutstandingRequests [_this]
+      (when (ifn? increment-outstanding-requests)
+        (increment-outstanding-requests)))
+
+    (incrementPingCount [_this]
+      (when (ifn? increment-ping-count)
+        (increment-ping-count)))
+
+    (incrementReconnects [_this]
+      (when (ifn? increment-reconnects)
+        (increment-reconnects)))
+
+    (incrementRepliesReceived [_this]
+      (when (ifn? increment-replies-received)
+        (increment-replies-received)))
+
+    (incrementRequestsSent [_this]
+      (when (ifn? increment-requests-sent)
+        (increment-requests-sent)))
+
+    (registerRead [_this byte-count]
+      (when (ifn? register-read)
+        (register-read byte-count)))
+
+    (registerWrite [_this byte-count]
+      (when (ifn? register-write)
+        (register-write byte-count)))
+
+    (setAdvancedTracking [_this track-advance]
+      (when (ifn? set-advanced-tracking)
+        (set-advanced-tracking track-advance)))))
 
 (defn ^:export connect
   "Connect to the NATS server. Optionally configure jet stream and key/value
