@@ -133,26 +133,26 @@
   "Create a `io.nats.client.StatisticsCollector` instance. Takes a map of
   functions:
 
-  - `decrement-outstanding-requests` `(fn [])`
-  - `increment-dropped-count` `(fn [])`
-  - `increment-duplicate-replies-received` `(fn [])`
-  - `increment-err-count` `(fn [])`
-  - `increment-exception-count` `(fn [])`
-  - `increment-flush-counter` `(fn [])`
-  - `increment-in-bytes` `(fn [])`
-  - `increment-in-msgs` `(fn [])`
-  - `increment-ok-count` `(fn [])`
-  - `increment-orphan-replies-received` `(fn [])`
-  - `increment-out-bytes` `(fn [byte-count])`
-  - `increment-out-msgs` `(fn [])`
-  - `increment-outstanding-requests` `(fn [])`
-  - `increment-ping-count` `(fn [])`
-  - `increment-reconnects` `(fn [])`
-  - `increment-replies-received` `(fn [])`
-  - `increment-requests-sent` `(fn [])`
-  - `register-read` `(fn [byte-count])`
-  - `register-write` `(fn [byte-count])`
-  - `set-advanced-tracking` `(fn [track-advance])`"
+  - `:decrement-outstanding-requests` `(fn [])`
+  - `:increment-dropped-count` `(fn [])`
+  - `:increment-duplicate-replies-received` `(fn [])`
+  - `:increment-err-count` `(fn [])`
+  - `:increment-exception-count` `(fn [])`
+  - `:increment-flush-counter` `(fn [])`
+  - `:increment-in-bytes` `(fn [])`
+  - `:increment-in-msgs` `(fn [])`
+  - `:increment-ok-count` `(fn [])`
+  - `:increment-orphan-replies-received` `(fn [])`
+  - `:increment-out-bytes` `(fn [byte-count])`
+  - `:increment-out-msgs` `(fn [])`
+  - `:increment-outstanding-requests` `(fn [])`
+  - `:increment-ping-count` `(fn [])`
+  - `:increment-reconnects` `(fn [])`
+  - `:increment-replies-received` `(fn [])`
+  - `:increment-requests-sent` `(fn [])`
+  - `:register-read` `(fn [byte-count])`
+  - `:register-write` `(fn [byte-count])`
+  - `:set-advanced-tracking` `(fn [track-advance])`"
   [{:keys [decrement-outstanding-requests
            increment-dropped-count
            increment-duplicate-replies-received
@@ -430,74 +430,74 @@
   `server-url-or-options` is either the NATS server URL as a string, or a map
   of the following keys:
 
-  - `auth-handler` a `AuthHandler` instance
-  - `buffer-size`
-  - `client-side-limit-checks`
-  - `connection-listener` A function that receives connection events.
-                          Will be passed the clj-nats connection and an event keyword.
-  - `connection-name`
-  - `connection-timeout` java.time.Duration or number of milliseconds
-  - `credentials`
-  - `credentials-file-path`
-  - `data-port-type`
-  - `discard-messages-when-outgoing-queue-full?`
-  - `error-listener` See `create-error-listener`
-  - `executor-service` A `java.util.concurrent.ExecutorService` instance
-  - `get-wait-time` A function that will be called with one argument, the number of connection
-                    attempts, and that returns a `java.time.Duration` dictating how long to
-                    wait before attempting another reconnect.
-  - `http-request-interceptor` See https://javadoc.io/static/io.nats/jnats/2.19.0/io/nats/client/Options.Builder.html#httpRequestInterceptor-java.util.function.Consumer-
-  - `http-request-interceptors` See https://javadoc.io/static/io.nats/jnats/2.19.0/io/nats/client/Options.Builder.html#httpRequestInterceptors-java.util.Collection-
-  - `ignore-discovered-servers?`
-  - `inbox-prefix`
-  - `jwt`
-  - `jwt-file-path`
-  - `keystore-password` A character array
-  - `keystore-path`
-  - `max-control-line`
-  - `max-messages-in-outgoing-queue`
-  - `max-pings-out`
-  - `max-reconnects`
-  - `nkey`
-  - `nkey-file-path`
-  - `no-echo?`
-  - `no-headers?`
-  - `no-no-responders?`
-  - `no-randomize?`
-  - `no-reconnect?`
-  - `no-resolve-hostnames?`
-  - `old-request-style?`
-  - `open-tls?`
-  - `pedantic?`
-  - `ping-interval` A `java.time.Duration` or a number of milliseconds
-  - `reconnect-buffer-size`
-  - `reconnect-jitter` `java.time.Duration`
-  - `reconnect-jitter-tls` ;; `java.time.Duration`
-  - `reconnect-wait` ;; `java.time.Duration`
-  - `report-no-responders?`
-  - `request-cleanup-interval` ;; `java.time.Duration`
-  - `secure?`
-  - `server-pool` See https://javadoc.io/static/io.nats/jnats/2.19.0/io/nats/client/ServerPool.html
-  - `server-url`
-  - `server-urls`
-  - `ssl-context` A `javax.net.ssl.SSLContext`
-  - `socket-so-linger` SO LINGER in seconds
-  - `socket-write-timeout` A `java.time.Duration` or a number of milliseconds
-  - `statistics-collector` See `create-statistics-collector`
-  - `utf8-subjects?`
-  - `tls-algorithm`
-  - `tls-first?`
-  - `token` A character array
-  - `trace-connection?`
-  - `truststore-password` A character array
-  - `truststore-path`
-  - `advanced-stats?`
-  - `use-dispatcher-with-executor?`
-  - `user-name` Character array or String. Must be same type as `:password`
-  - `password` Character array or String. Must be same type as `:user-name`
-  - `time-trace`
-  - `use-timeout-exception?`
-  - `verbose?`"
+  - `:nats.core/auth-handler` a `AuthHandler` instance
+  - `:nats.core/buffer-size`
+  - `:nats.core/client-side-limit-checks`
+  - `:nats.core/connection-listener` A function that receives connection events.
+                                     Will be passed the clj-nats connection and an event keyword.
+  - `:nats.core/connection-name`
+  - `:nats.core/connection-timeout` java.time.Duration or number of milliseconds
+  - `:nats.core/credentials`
+  - `:nats.core/credentials-file-path`
+  - `:nats.core/data-port-type`
+  - `:nats.core/discard-messages-when-outgoing-queue-full?`
+  - `:nats.core/error-listener` See `create-error-listener`
+  - `:nats.core/executor-service` A `java.util.concurrent.ExecutorService` instance
+  - `:nats.core/get-wait-time` A function that will be called with one argument, the number of connection
+                               attempts, and that returns a `java.time.Duration` dictating how long to
+                               wait before attempting another reconnect.
+  - `:nats.core/http-request-interceptor` See https://javadoc.io/static/io.nats/jnats/2.19.0/io/nats/client/Options.Builder.html#httpRequestInterceptor-java.util.function.Consumer-
+  - `:nats.core/http-request-interceptors` See https://javadoc.io/static/io.nats/jnats/2.19.0/io/nats/client/Options.Builder.html#httpRequestInterceptors-java.util.Collection-
+  - `:nats.core/ignore-discovered-servers?`
+  - `:nats.core/inbox-prefix`
+  - `:nats.core/jwt`
+  - `:nats.core/jwt-file-path`
+  - `:nats.core/keystore-password` A character array
+  - `:nats.core/keystore-path`
+  - `:nats.core/max-control-line`
+  - `:nats.core/max-messages-in-outgoing-queue`
+  - `:nats.core/max-pings-out`
+  - `:nats.core/max-reconnects`
+  - `:nats.core/nkey`
+  - `:nats.core/nkey-file-path`
+  - `:nats.core/no-echo?`
+  - `:nats.core/no-headers?`
+  - `:nats.core/no-no-responders?`
+  - `:nats.core/no-randomize?`
+  - `:nats.core/no-reconnect?`
+  - `:nats.core/no-resolve-hostnames?`
+  - `:nats.core/old-request-style?`
+  - `:nats.core/open-tls?`
+  - `:nats.core/pedantic?`
+  - `:nats.core/ping-interval` A `java.time.Duration` or a number of milliseconds
+  - `:nats.core/reconnect-buffer-size`
+  - `:nats.core/reconnect-jitter` `java.time.Duration`
+  - `:nats.core/reconnect-jitter-tls` ;; `java.time.Duration`
+  - `:nats.core/reconnect-wait` ;; `java.time.Duration`
+  - `:nats.core/report-no-responders?`
+  - `:nats.core/request-cleanup-interval` ;; `java.time.Duration`
+  - `:nats.core/secure?`
+  - `:nats.core/server-pool` See https://javadoc.io/static/io.nats/jnats/2.19.0/io/nats/client/ServerPool.html
+  - `:nats.core/server-url`
+  - `:nats.core/server-urls`
+  - `:nats.core/ssl-context` A `javax.net.ssl.SSLContext`
+  - `:nats.core/socket-so-linger` SO LINGER in seconds
+  - `:nats.core/socket-write-timeout` A `java.time.Duration` or a number of milliseconds
+  - `:nats.core/statistics-collector` See `create-statistics-collector`
+  - `:nats.core/utf8-subjects?`
+  - `:nats.core/tls-algorithm`
+  - `:nats.core/tls-first?`
+  - `:nats.core/token` A character array
+  - `:nats.core/trace-connection?`
+  - `:nats.core/truststore-password` A character array
+  - `:nats.core/truststore-path`
+  - `:nats.core/advanced-stats?`
+  - `:nats.core/use-dispatcher-with-executor?`
+  - `:nats.core/user-name` Character array or String. Must be same type as `:password`
+  - `:nats.core/password` Character array or String. Must be same type as `:user-name`
+  - `:nats.core/time-trace`
+  - `:nats.core/use-timeout-exception?`
+  - `:nats.core/verbose?`"
   [server-url-or-options & [{:keys [jet-stream-options key-value-options]}]]
   (let [conn (Nats/connect (cond-> server-url-or-options
                              (not (string? server-url-or-options))

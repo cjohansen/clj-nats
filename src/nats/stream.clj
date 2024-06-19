@@ -402,21 +402,21 @@
 (defn ^{:style/indent 1 :export true} create-stream
   "Adds a stream. `config` is a map of the following keys:
 
-   - :nats.stream/name
-   - :nats.stream/description
-   - :nats.stream/subjects
-   - :nats.stream/retention-policy
-   - :nats.stream/allow-direct?
-   - :nats.stream/allow-rollup?
-   - :nats.stream/deny-delete?
-   - :nats.stream/deny-purge?
-   - :nats.stream/max-age
-   - :nats.stream/max-bytes
-   - :nats.stream/max-consumers
-   - :nats.stream/max-messages
-   - :nats.stream/max-messages-per-subject
-   - :nats.stream/max-msg-size
-   - :nats.stream/replicas"
+   - `:nats.stream/name`
+   - `:nats.stream/description`
+   - `:nats.stream/subjects`
+   - `:nats.stream/retention-policy`
+   - `:nats.stream/allow-direct?`
+   - `:nats.stream/allow-rollup?`
+   - `:nats.stream/deny-delete?`
+   - `:nats.stream/deny-purge?`
+   - `:nats.stream/max-age`
+   - `:nats.stream/max-bytes`
+   - `:nats.stream/max-consumers`
+   - `:nats.stream/max-messages`
+   - `:nats.stream/max-messages-per-subject`
+   - `:nats.stream/max-msg-size`
+   - `:nats.stream/replicas`"
   [conn config]
   (-> (jet-stream-management conn)
       (.addStream (build-stream-configuration config))
