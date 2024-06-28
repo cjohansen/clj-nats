@@ -55,13 +55,17 @@
   ([jwt-file-path nkey-file-path]
    (Nats/credentials jwt-file-path nkey-file-path)))
 
+(defn- strbytes [s]
+  (cond-> s
+    (string? s) .getBytes))
+
 (defn ^:export create-static-auth-handler
   "Creates an `io.nats.client.AuthHandler` for a credential string, or a pair of JWT and nkey strings.
   The result can be passed as `:nats.core/auth-handler` in `nats.core/connect`."
   ([credentials]
-   (Nats/credentials credentials))
+   (Nats/staticCredentials (strbytes credentials)))
   ([jwt nkey]
-   (Nats/credentials jwt nkey)))
+   (Nats/staticCredentials (strbytes jwt) (strbytes nkey))))
 
 (defn ^:export create-error-listener
   "Create an `io.nats.client.ErrorListener` instance. Takes the following
