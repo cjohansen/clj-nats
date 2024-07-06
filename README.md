@@ -36,11 +36,11 @@ All functions take native Clojure data as arguments instead of instances of
 jnats option classes. Almost all functions return Clojure data instead of
 instances of jnats data classes.
 
-The only exceptions are Java time classes, as they are immutable values, and not
-easily represented without their wrappers. Specifically, clj-nats uses
-`java.time.Duration` (timeouts etc) and `java.time.Instant` (timestamps etc).
-With [java-time-literals](https://github.com/magnars/java-time-literals) even
-these will be represented as data literals.
+The only exceptions are Java time classes, as they are already immutable values.
+Specifically, clj-nats uses `java.time.Duration` (timeouts etc) and
+`java.time.Instant` (timestamps etc). With
+[java-time-literals](https://github.com/magnars/java-time-literals) even these
+will be represented as data literals.
 
 ### EDN messages
 
