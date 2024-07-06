@@ -4,10 +4,13 @@ import io.nats.client.Connection;
 import io.nats.client.JetStreamApiException;
 import io.nats.client.KeyValue;
 import io.nats.client.KeyValueOptions;
+import io.nats.client.Message;
 import io.nats.client.api.*;
 import io.nats.client.support.Validator;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 import static io.nats.client.support.Validator.*;
 
@@ -42,6 +45,13 @@ public class CljNatsKeyValue extends NatsKeyValue implements KeyValue {
     private PublishAck _write(String key, byte[] data, Headers h) throws IOException, JetStreamApiException {
         validateNonWildcardKvKeyRequired(key);
         return js.publish(NatsMessage.builder().subject(writeSubject(key)).data(data).headers(h).build());
+    }
+
+    public List<Message> getHistory(String key) throws IOException, JetStreamApiException, InterruptedException {
+        validateNonWildcardKvKeyRequired(key);
+        List<Message> list = new ArrayList<>();
+        visitSubject(readSubject(key), DeliverPolicy.All, false, true, m -> list.add(m));
+        return list;
     }
 
     public static CljNatsKeyValue create(Connection connection, String bucketName, KeyValueOptions options) throws IOException {
