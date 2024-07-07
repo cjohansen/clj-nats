@@ -22,7 +22,7 @@ Until then, use at risk of breaking changes.
 - [x] Streams
 - [x] Consumers
 - [x] Request/response
-- [ ] Key/value store (in progress)
+- [x] Key/value store (in progress)
 - [ ] Object store
 
 ## Rationale
@@ -72,7 +72,7 @@ The goal is to make it easy to translate CLI examples to clj-nats usage.
 
 [Full API docs on cljdoc.org](https://cljdoc.org/d/no.cjohansen/clj-nats/).
 
-Create a connection:
+### Create a connection
 
 ```clj
 (require '[nats.core :as nats])
@@ -82,7 +82,9 @@ Create a connection:
 
 See also: [authenticated connections](#auth).
 
-Publish a message (see below for publishing to streams):
+### Pubsub
+
+Publishing a message (see below for publishing to streams):
 
 ```clj
 (require '[nats.core :as nats])
@@ -109,7 +111,7 @@ Subscribing to messages (see below for consuming streams):
 (nats/unsubscribe subscription)
 ```
 
-Request/response:
+### Request/response
 
 ```clj
 (require '[nats.core :as nats])
@@ -134,6 +136,8 @@ Request/response:
 (nats/unsubscribe subscription)
 (nats/close conn)
 ```
+
+### Streams
 
 Create a stream:
 
@@ -182,7 +186,7 @@ Create a consumer:
 (consumer/get-consumer-info conn "test-stream" "test-consumer")
 ```
 
-Consume messages:
+Consume stream messages:
 
 ```clj
 (require '[nats.core :as nats]
@@ -225,6 +229,67 @@ Get information from the server:
 (stream/get-streams conn)
 (stream/get-account-statistics conn)
 ```
+
+### Key/value
+
+Create a key/value store bucket:
+
+```clj
+(require '[nats.core :as nats]
+         '[nats.kv :as kv])
+
+(def conn (nats/connect "nats://localhost:4222"))
+
+(kv/create-bucket conn
+  {::kv/bucket-name "my-kv-store"
+   ::kv/max-history-per-key 24})
+```
+
+Put a key/value pair and retrieve it:
+
+```clj
+(kv/put conn :my-kv-store/fruits #{"Banana" "Apple"})
+(kv/get conn :my-kv-store/fruits)
+;;=>
+;; {:nats.kv.entry/bucket "my-kv-store"
+;;  :nats.kv.entry/key "fruits"
+;;  :nats.kv.entry/created-at #time/inst "2024-07-07T07:53:09.315650Z"
+;;  :nats.kv.entry/operation :nats.kv-operation/put
+;;  :nats.kv.entry/revision 1
+;;  :nats.kv.entry/value #{"Banana" "Apple"}}
+
+(kv/get-value conn :my-kv-store/fruits)
+;;=> #{"Banana" "Apple"}
+```
+
+Delete a key:
+
+```clj
+(kv/delete conn :my-kv-store/fruits)
+```
+
+Get history on a key:
+
+```clj
+(kv/get-history conn :my-kv-store/fruits)
+```
+
+Purge all history on a key:
+
+```clj
+(kv/purge conn :my-kv-store/fruits)
+```
+
+#### Note on key/value stores
+
+clj-nats uses headers on the underlying JetStream subject for key/value pairs in
+order to automatically decode EDN data (e.g. making sure `get` retrieves Clojure
+data, not opaque bytes). Using headers on key/value streams is not supported by
+jnats, and there is an open discussion on whether this is officially supported.
+For this reason, clj-nats' key/value implementation is somewhat experimental.
+
+To opt out of the experimental aspect, simply do not send Clojure data directly
+to `nats.kv/put` - instead, send a string, or raw bytes.
 
 <a id="auth"></a>
 ## Authenticated connections

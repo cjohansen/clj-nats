@@ -5,10 +5,12 @@
             [nats.stream :as stream])
   (:refer-clojure :exclude [get])
   (:import (io.nats.client JetStreamOptions JetStreamOptions$Builder
-                           KeyValueOptions KeyValueOptions$Builder)
+                           KeyValueOptions KeyValueOptions$Builder
+                           Message)
            (io.nats.client.api External External$Builder
                                KeyValueConfiguration KeyValueConfiguration$Builder
-                               KeyValueEntry KeyValueOperation KeyValueStatus
+                               KeyValueOperation KeyValueStatus
+                               KeyValuePurgeOptions KeyValuePurgeOptions$Builder
                                MessageInfo Mirror Mirror$Builder
                                Placement Placement$Builder
                                Republish Republish$Builder
@@ -75,6 +77,15 @@
      :nats.kv.entry/created-at (.toInstant (.getTime msg))
      :nats.kv.entry/operation (operation->k (NatsKeyValueUtil/getOperation headers))
      :nats.kv.entry/revision (.getSeq msg)
+     :nats.kv.entry/value (message/get-message-data (message/headers->map headers) (.getData msg))}))
+
+(defn message->key-value-entry [bucket k ^Message msg]
+  (let [headers (.getHeaders msg)]
+    {:nats.kv.entry/bucket bucket
+     :nats.kv.entry/key k
+     :nats.kv.entry/created-at (.toInstant (.timestamp (.metaData msg)))
+     :nats.kv.entry/operation (operation->k (NatsKeyValueUtil/getOperation headers))
+     :nats.kv.entry/revision (.streamSequence (.metaData msg))
      :nats.kv.entry/value (message/get-message-data (message/headers->map headers) (.getData msg))}))
 
 ;; Build options
@@ -267,20 +278,7 @@
   [conn config]
   (-> (bucket-management conn)
       (.create (build-key-value-options config))
-      key-value-status->map
-      ))
-
-(defn ^:export update-bucket
-  "Update a key/value bucket. See `create-bucket` for `config` details."
-  [conn config]
-  (-> (bucket-management conn)
-      (.update (build-key-value-options config))
       key-value-status->map))
-
-(defn ^:export delete-bucket
-  "Delete a key/value bucket"
-  [conn bucket-name]
-  (.delete (bucket-management conn) bucket-name))
 
 (defn ^:export get-bucket-status
   [conn bucket-name]
@@ -288,10 +286,29 @@
       (.getStatus bucket-name)
       key-value-status->map))
 
+(defn ^{:style/indent 1 :export true} update-bucket
+  "Update a key/value bucket. See `create-bucket` for `config` details."
+  [conn config]
+  (let [config (merge (get-bucket-status conn (::bucket-name config)) config)]
+    (-> (bucket-management conn)
+        (.update (build-key-value-options config))
+        key-value-status->map)))
+
+(defn ^:export delete-bucket
+  "Delete a key/value bucket"
+  [conn bucket-name]
+  (.delete (bucket-management conn) bucket-name))
+
 (defn ^:export get-bucket-statuses [conn]
   (->> (.getStatuses (bucket-management conn))
        (map key-value-status->map)
        set))
+
+(defn- write-key [conn bucket-name k v headers]
+  (let [{:keys [kind data]} (message/get-message-body v)
+        all-headers (into (message/set-content-type nil kind) headers)]
+    (-> (kv-management conn bucket-name)
+        (.put k data (some-> all-headers message/map->Headers)))))
 
 (defn ^:export put
   "Put a key in the bucket. `v` can be either a byte array or any serializable
@@ -304,14 +321,19 @@
   (put conn \"bucket\" \"key\" v)
   ```"
   ([conn k v]
-   (put conn (namespace k) (name k) v))
+   (write-key conn (namespace k) (name k) v nil))
   ([conn bucket-name k v]
-   (let [{:keys [kind data]} (message/get-message-body v)
-         headers (message/set-content-type nil kind)]
-     (-> (kv-management conn bucket-name)
-         (.put k data (some-> headers message/map->Headers))))))
+   (write-key conn bucket-name k v nil)))
 
 (defn ^:export get
+  "Get the entry for key `k`. Returns the version specified by `rev`, or the
+  current one.
+
+  ```
+  (get conn :bucket/key)
+  (get conn :bucket/key 42)
+  (get conn \"bucket\" \"key\" 42)
+  ```"
   ([conn k]
    (get conn (namespace k) (name k) nil))
   ([conn k rev]
@@ -325,6 +347,14 @@
          entry)))))
 
 (defn ^:export get-value
+  "Get the value for key `k`. Returns the version specified by `rev`, or the
+  current one.
+
+  ```
+  (get-value conn :bucket/key)
+  (get-value conn :bucket/key 42)
+  (get-value conn \"bucket\" \"key\" 42)
+  ```"
   ([conn k]
    (get-value conn (namespace k) (name k) nil))
   ([conn k rev]
@@ -332,14 +362,87 @@
   ([conn bucket-name k rev]
    (:nats.kv.entry/value (get conn bucket-name k rev))))
 
-(defn ^:export update [conn bucket-name k v rev])
+(defn ^:export cas
+  "Compare and swap. Sets the value of `k` to `v`, only if the current revision is
+  still `rev`.
 
-(defn ^:export delete [conn bucket-name k & [expected-rev]])
+  Returns the new revision number for the key.
 
-(defn ^:export get-history [conn bucket-name k])
+  ```
+  (cas conn :bucket/key \"val\" 32)
+  (cas conn \"bucket\" \"key\" \"val\" 32)
+  ```"
+  ([conn k v rev]
+   (cas conn (namespace k) (name k) v rev))
+  ([conn bucket-name k v rev]
+   (write-key conn bucket-name k v {"Nats-Expected-Last-Subject-Sequence" (str rev)})))
 
-(defn ^:export get-keys [conn bucket-name k])
+(defn ^:export delete
+  "Delete the value at key `k`. When providing the optional `expected-rev`, only
+  delete the value if the current revision is still `expected-rev`.
 
-(defn ^:export purge [conn bucket-name k & [expected-rev]])
+  Returns the new revision number for the key.
 
-(defn ^:export purge-deletes [conn bucket-name & [opt]])
+  ```
+  (delete conn :bucket/key)
+
+  ;; Delete specific revision
+  (delete conn :bucket/key 32)
+
+  (delete conn \"bucket\" \"key\" 32)
+
+  ;; Explicitly name bucket and key without specifying revision
+  (delete conn \"bucket\" \"key\" nil)
+  ```"
+  ([conn k]
+   (delete conn (namespace k) (name k) nil))
+  ([conn k expected-rev]
+   (delete conn (namespace k) (name k) expected-rev))
+  ([conn bucket-name k expected-rev]
+   (let [headers (cond-> {"KV-Operation" "DEL"}
+                   expected-rev (assoc "Nats-Expected-Last-Subject-Sequence" (str expected-rev)))]
+     (write-key conn bucket-name k nil headers))))
+
+(defn ^:export get-history
+  "Returns all revisions of the key `k`.
+
+  ```
+  (get-history conn :bucket/key)
+  (get-history conn \"bucket\" \"key\")
+  ```"
+  ([conn k]
+   (get-history conn (namespace k) (name k)))
+  ([conn bucket-name k]
+   (->> (.getHistory (kv-management conn bucket-name) k)
+        (map #(message->key-value-entry bucket-name k %)))))
+
+(defn ^:export get-keys
+  "Return a set of all the keys in the bucket as strings"
+  [conn bucket-name]
+  (set (.keys (kv-management conn bucket-name))))
+
+(defn ^:export purge
+  "Purge all history for a single key, optionally specify the expected current revision.
+
+  ```
+  (purge conn :bucket/key)
+  (purge conn :bucket/key 23)
+  (purge conn \"bucket\" \"key\" 23)
+  ```"
+  ([conn k]
+   (purge conn (namespace k) (name k) nil))
+  ([conn k expected-rev]
+   (purge conn (namespace k) (name k) expected-rev))
+  ([conn bucket-name k expected-rev]
+   (if expected-rev
+     (.purge (kv-management conn bucket-name) k expected-rev)
+     (.purge (kv-management conn bucket-name) k))))
+
+(defn ^:export purge-deleted
+  "Purges history for deleted keys in `bucket-name`"
+  [conn bucket-name & [{:keys [delete-marker-threshold]}]]
+  (.purgeDeletes
+   (kv-management conn bucket-name)
+   (cond-> ^KeyValuePurgeOptions$Builder (KeyValuePurgeOptions/builder)
+     delete-marker-threshold (.deleteMarkersThreshold delete-marker-threshold)
+     :then .build)))

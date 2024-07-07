@@ -6,9 +6,11 @@
             [java-time-literals.core]
             [nats.consumer :as consumer]
             [nats.core :as nats]
+            [nats.kv :as kv]
             [nats.message :as message]
             [nats.stream :as stream])
-  (:import (java.time Instant)))
+  (:import (io.nats.client JetStreamApiException)
+           (java.time Instant)))
 
 :java-time-literals.core/keep
 (set! *print-namespace-maps* false)
@@ -545,7 +547,7 @@
              :nats.consumer/mem-storage-was-set? false
              :nats.consumer/filter-subject "clj-nats.stream.a.*"
              :nats.consumer/max-pull-waiting 512
-             :nats.consumer/backoff-was-set? false
+             :nats.consumer/backoff-was-set? true
              :nats.consumer/start-seq-was-set? false
              :nats.consumer/max-ack-pending 1000}})))
 
@@ -612,3 +614,315 @@
             ["2" "clj-nats.stream.a.2" 3 {:message "Message A.2"}]
             ["2" "clj-nats.stream.a.1" 1 {:message "Message A.1"}]
             :stream-empty]))))
+
+(defmacro with-kv-bucket
+  {:clj-kondo/lint-as 'clojure.core/let}
+  [[conn-binding bucket-name] & body]
+  `(let [~conn-binding (nats/connect "nats://localhost:4222")]
+     (try
+       (kv/create-bucket ~conn-binding
+         {::kv/bucket-name ~bucket-name
+          ::kv/description "A nice little bucket"
+          ::kv/max-history-per-key 10})
+       ~@body
+       (finally
+         (kv/delete-bucket ~conn-binding ~bucket-name)
+         (nats/close ~conn-binding)))))
+
+(defn remove-ks [ks data]
+  (walk/postwalk
+   (fn [x]
+     (if (map? x)
+       (apply dissoc x ks)
+       x))
+   data))
+
+(deftest kv-test
+  (testing "Returns data about bucket creation"
+    (is (= (->> (with-kv-bucket [_conn "clj-nats-test"])
+                (remove-ks #{:nats.stream/create-time
+                             :nats.stream/timestamp
+                             :nats.stream/last-time
+                             :nats.stream/first-time}))
+           {:nats.kv/byte-count 0
+            :nats.kv/entry-count 0
+            :nats.kv/max-value-size -1
+            :nats.kv/max-history-per-key 10
+            :nats.kv/compressed? false
+            :nats.kv/backing-store "JetStream"
+            :nats.kv/configuration {:nats.kv/max-history-per-key 10
+                                    :nats.kv/max-value-size -1}
+            :nats.kv/max-bucket-size -1
+            :nats.kv/storage-type :nats.storage-type/file
+            :nats.kv/description "A nice little bucket"
+            :nats.kv/bucket-name "clj-nats-test"
+            :nats.kv/ttl #time/dur "PT0S"
+            :nats.kv/replicas 1
+            :nats.kv/stream-info
+            {:nats.stream/configuration
+             {:nats.stream/allow-direct? true
+              :nats.stream/max-msgs -1
+              :nats.stream/no-ack? false
+              :nats.stream/max-msgs-per-subject 10
+              :nats.stream/deny-purge? false
+              :nats.stream/first-sequence 1
+              :nats.stream/subjects #{"$KV.clj-nats-test.>"}
+              :nats.stream/max-msg-size -1
+              :nats.stream/discard-new-per-subject? false
+              :nats.stream/mirror-direct? false
+              :nats.stream/compression-option :nats.compression-option/none
+              :nats.stream/discard-policy :nats.discard-policy/new
+              :nats.stream/allow-rollup? true
+              :nats.stream/max-age #time/dur "PT0S"
+              :nats.stream/sealed? false
+              :nats.stream/replicas 1
+              :nats.stream/duplicate-window #time/dur "PT2M"
+              :nats.stream/retention-policy :nats.retention-policy/limits
+              :nats.stream/name "KV_clj-nats-test"
+              :nats.stream/metadata {}
+              :nats.stream/max-consumers -1
+              :nats.stream/deny-delete? true
+              :nats.stream/max-bytes -1
+              :nats.stream/consumer-limits {:nats.limits/max-ack-pending -1}
+              :nats.stream/storage-type :nats.storage-type/file
+              :nats.stream/description "A nice little bucket"}
+             :nats.stream/stream-state
+             {:nats.stream/deleted-count 0
+              :nats.stream/subjects #{}
+              :nats.stream/byte-count 0
+              :nats.stream/subject-count 0
+              :nats.stream/consumer-count 0
+              :nats.stream/first-sequence-number 0
+              :nats.stream/deleted #{}
+              :nats.stream/message-count 0}}})))
+
+  (testing "Update bucket"
+    (is (= (-> (with-kv-bucket [conn "clj-nats-test"]
+                 (kv/update-bucket conn
+                   {::kv/bucket-name "clj-nats-test"
+                    ::kv/description "A well-behaved bucket"}))
+               (select-keys [:nats.kv/max-history-per-key
+                             :nats.kv/description]))
+           {:nats.kv/description "A well-behaved bucket"
+            :nats.kv/max-history-per-key 10})))
+
+  (testing "Get bucket status"
+    (is (= (-> (with-kv-bucket [conn "clj-nats-test"]
+                 (kv/get-bucket-status conn "clj-nats-test"))
+               :nats.kv/description)
+           "A nice little bucket")))
+
+  (testing "Get bucket statuses"
+    (is (= (->> (with-kv-bucket [conn "clj-nats-test"]
+                  (kv/get-bucket-statuses conn))
+                (filter (comp #{"clj-nats-test"} :nats.kv/bucket-name))
+                first
+                :nats.kv/description)
+           "A nice little bucket")))
+
+  (testing "Puts keys with bucket/key keywords"
+    (is (= (->> (with-kv-bucket [conn "clj-nats-test"]
+                  [(kv/put conn :clj-nats-test/str-key "A string")
+                   (kv/put conn :clj-nats-test/kw-key :a-keyword)
+                   (kv/put conn :clj-nats-test/map-key {:a "Map"})]))
+           [1 2 3])))
+
+  (testing "Gets values with bucket/key keywords"
+    (is (= (->> (with-kv-bucket [conn "clj-nats-test"]
+                  (kv/put conn :clj-nats-test/str-key "A string")
+                  (kv/put conn :clj-nats-test/kw-key :a-keyword)
+                  (kv/put conn :clj-nats-test/map-key {:a "Map"})
+                  [(kv/get conn :clj-nats-test/str-key)
+                   (kv/get conn :clj-nats-test/kw-key)
+                   (kv/get conn :clj-nats-test/map-key)])
+                (remove-ks #{:nats.kv.entry/created-at}))
+           [{:nats.kv.entry/bucket "clj-nats-test"
+             :nats.kv.entry/key "str-key"
+             :nats.kv.entry/operation :nats.kv-operation/put
+             :nats.kv.entry/revision 1
+             :nats.kv.entry/value "A string"}
+            {:nats.kv.entry/bucket "clj-nats-test"
+             :nats.kv.entry/key "kw-key"
+             :nats.kv.entry/operation :nats.kv-operation/put
+             :nats.kv.entry/revision 2
+             :nats.kv.entry/value :a-keyword}
+            {:nats.kv.entry/bucket "clj-nats-test"
+             :nats.kv.entry/key "map-key"
+             :nats.kv.entry/operation :nats.kv-operation/put
+             :nats.kv.entry/revision 3
+             :nats.kv.entry/value {:a "Map"}}])))
+
+  (testing "Puts keys with bucket and key strings"
+    (is (= (with-kv-bucket [conn "clj-nats-test"]
+             [(kv/put conn "clj-nats-test" "str-key-2" "A string")
+              (kv/put conn "clj-nats-test" "kw-key-2" :a-keyword)
+              (kv/put conn "clj-nats-test" "map-key-2" {:a "Map"})])
+           [1 2 3])))
+
+  (testing "Gets values with bucket and key strings"
+    (is (= (->> (with-kv-bucket [conn "clj-nats-test"]
+                  (kv/put conn "clj-nats-test" "str-key-2" "A string")
+                  (kv/put conn "clj-nats-test" "kw-key-2" :a-keyword)
+                  (kv/put conn "clj-nats-test" "map-key-2" {:a "Map"})
+                  [(kv/get conn "clj-nats-test" "str-key-2" nil)
+                   (kv/get conn "clj-nats-test" "kw-key-2" nil)
+                   (kv/get conn "clj-nats-test" "map-key-2" nil)])
+                (remove-ks #{:nats.kv.entry/created-at}))
+           [{:nats.kv.entry/bucket "clj-nats-test"
+             :nats.kv.entry/key "str-key-2"
+             :nats.kv.entry/operation :nats.kv-operation/put
+             :nats.kv.entry/revision 1
+             :nats.kv.entry/value "A string"}
+            {:nats.kv.entry/bucket "clj-nats-test"
+             :nats.kv.entry/key "kw-key-2"
+             :nats.kv.entry/operation :nats.kv-operation/put
+             :nats.kv.entry/revision 2
+             :nats.kv.entry/value :a-keyword}
+            {:nats.kv.entry/bucket "clj-nats-test"
+             :nats.kv.entry/key "map-key-2"
+             :nats.kv.entry/operation :nats.kv-operation/put
+             :nats.kv.entry/revision 3
+             :nats.kv.entry/value {:a "Map"}}])))
+
+  (testing "Overwrites keys"
+    (is (= (->> (with-kv-bucket [conn "clj-nats-test"]
+                  (kv/put conn :clj-nats-test/map-key {:a "Map"})
+                  [(kv/put conn :clj-nats-test/map-key {:another "Map"})
+                   (kv/get conn :clj-nats-test/map-key)])
+                (remove-ks #{:nats.kv.entry/created-at}))
+           [2
+            {:nats.kv.entry/bucket "clj-nats-test"
+             :nats.kv.entry/key "map-key"
+             :nats.kv.entry/operation :nats.kv-operation/put
+             :nats.kv.entry/revision 2
+             :nats.kv.entry/value {:another "Map"}}])))
+
+  (testing "Gets value"
+    (is (= (with-kv-bucket [conn "clj-nats-test"]
+             (kv/put conn :clj-nats-test/str-key "A string")
+             (kv/put conn :clj-nats-test/map-key {:a "Map"})
+             (kv/put conn :clj-nats-test/map-key {:another "Map"})
+             [(kv/get-value conn :clj-nats-test/map-key)
+              (kv/get-value conn "clj-nats-test" "map-key" 1)
+              (kv/get-value conn "clj-nats-test" "map-key" 2)
+              (kv/get-value conn :clj-nats-test/map-key 3)])
+           [{:another "Map"}
+            nil
+            {:a "Map"}
+            {:another "Map"}])))
+
+  (testing "Updates value with compare-and-swap"
+    (is (= (with-kv-bucket [conn "clj-nats-test"]
+             (kv/put conn :clj-nats-test/map-key {:a "Map"})
+             (kv/cas conn :clj-nats-test/map-key {:another "Map"} 1))
+           2)))
+
+  (testing "Fails to cas value with wrong revision"
+    (is (thrown?
+         JetStreamApiException
+         (with-kv-bucket [conn "clj-nats-test"]
+           (kv/put conn :clj-nats-test/map-key {:a "Map"})
+           (kv/put conn :clj-nats-test/map-key {:another "Map"})
+           (kv/cas conn :clj-nats-test/map-key {:yet/another "Map"} 1)))))
+
+  (testing "Deletes key"
+    (is (= (with-kv-bucket [conn "clj-nats-test"]
+             (kv/put conn :clj-nats-test/map-key {:a "Map"})
+             [(kv/delete conn :clj-nats-test/map-key)
+              (kv/get conn :clj-nats-test/map-key)])
+           [2 nil])))
+
+  (testing "Gets key history"
+    (is (= (->> (with-kv-bucket [conn "clj-nats-test"]
+                  (kv/put conn :clj-nats-test/map-key {:a "Map"})
+                  (kv/put conn :clj-nats-test/map-key {:another "Map"})
+                  (kv/delete conn :clj-nats-test/map-key)
+                  (kv/put conn :clj-nats-test/map-key {:it/is "Ressurrected"})
+                  (kv/get-history conn :clj-nats-test/map-key))
+                (remove-ks #{:nats.kv.entry/created-at}))
+           [{:nats.kv.entry/bucket "clj-nats-test"
+             :nats.kv.entry/key "map-key"
+             :nats.kv.entry/operation :nats.kv-operation/put
+             :nats.kv.entry/revision 1
+             :nats.kv.entry/value {:a "Map"}}
+            {:nats.kv.entry/bucket "clj-nats-test"
+             :nats.kv.entry/key "map-key"
+             :nats.kv.entry/operation :nats.kv-operation/put
+             :nats.kv.entry/revision 2
+             :nats.kv.entry/value {:another "Map"}}
+            {:nats.kv.entry/bucket "clj-nats-test"
+             :nats.kv.entry/key "map-key"
+             :nats.kv.entry/operation :nats.kv-operation/delete
+             :nats.kv.entry/revision 3
+             :nats.kv.entry/value nil}
+            {:nats.kv.entry/bucket "clj-nats-test"
+             :nats.kv.entry/key "map-key"
+             :nats.kv.entry/operation :nats.kv-operation/put
+             :nats.kv.entry/revision 4
+             :nats.kv.entry/value {:it/is "Ressurrected"}}])))
+
+  (testing "Gets bucket keys"
+    (is (= (->> (with-kv-bucket [conn "clj-nats-test"]
+                  (kv/put conn :clj-nats-test/str-key "A string")
+                  (kv/put conn :clj-nats-test/kw-key :a-keyword)
+                  (kv/put conn :clj-nats-test/map-key {:a "Map"})
+                  (kv/get-keys conn "clj-nats-test")))
+           #{"str-key" "kw-key" "map-key"})))
+
+  (testing "Purges history for a key"
+    (is (= (with-kv-bucket [conn "clj-nats-test"]
+             (kv/put conn :clj-nats-test/map-key {:a "Map"})
+             (kv/put conn :clj-nats-test/map-key {:another "Map"})
+             (kv/delete conn :clj-nats-test/map-key)
+             (kv/put conn :clj-nats-test/map-key {:it/is "Ressurrected"})
+             [(kv/purge conn :clj-nats-test/map-key)
+              (kv/get conn :clj-nats-test/map-key)])
+           [nil nil])))
+
+  (testing "Purges history with expected revision"
+    (is (nil? (with-kv-bucket [conn "clj-nats-test"]
+                (kv/put conn :clj-nats-test/map-key {:a "Map"})
+                (kv/put conn :clj-nats-test/map-key {:another "Map"})
+                (kv/purge conn :clj-nats-test/map-key 2)))))
+
+  (testing "Fails to purge key history with mismatching revision"
+    (is (thrown?
+         JetStreamApiException
+         (with-kv-bucket [conn "clj-nats-test"]
+           (kv/put conn :clj-nats-test/map-key {:a "Map"})
+           (kv/put conn :clj-nats-test/map-key {:another "Map"})
+           (kv/purge conn :clj-nats-test/map-key 3)))))
+
+  (testing "Purges history with string bucket and key"
+    (is (nil? (with-kv-bucket [conn "clj-nats-test"]
+                (kv/put conn :clj-nats-test/map-key {:a "Map"})
+                (kv/put conn :clj-nats-test/map-key {:another "Map"})
+                (kv/purge conn "clj-nats-test" "map-key" 2)))))
+
+  (testing "Purges history for deleted keys"
+    (is (= (->> (with-kv-bucket [conn "clj-nats-test"]
+                  (kv/put conn :clj-nats-test/key1 "A")
+                  (kv/put conn :clj-nats-test/key1 "B")
+                  (kv/put conn :clj-nats-test/key2 "C")
+                  (kv/put conn :clj-nats-test/key2 "D")
+                  (kv/delete conn :clj-nats-test/key1)
+                  [(kv/purge-deleted conn "clj-nats-test")
+                   (kv/get-history conn :clj-nats-test/key1)
+                   (kv/get-history conn :clj-nats-test/key2)])
+                (remove-ks #{:nats.kv.entry/created-at}))
+           [nil
+            [{:nats.kv.entry/bucket "clj-nats-test"
+              :nats.kv.entry/key "key1"
+              :nats.kv.entry/operation :nats.kv-operation/delete
+              :nats.kv.entry/revision 5
+              :nats.kv.entry/value nil}]
+            [{:nats.kv.entry/bucket "clj-nats-test"
+              :nats.kv.entry/key "key2"
+              :nats.kv.entry/operation :nats.kv-operation/put
+              :nats.kv.entry/revision 3
+              :nats.kv.entry/value "C"}
+             {:nats.kv.entry/bucket "clj-nats-test"
+              :nats.kv.entry/key "key2"
+              :nats.kv.entry/operation :nats.kv-operation/put
+              :nats.kv.entry/revision 4
+              :nats.kv.entry/value "D"}]]))))
