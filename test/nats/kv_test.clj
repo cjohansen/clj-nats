@@ -1,9 +1,12 @@
 (ns nats.kv-test
   (:require [clojure.test :refer [deftest is testing]]
+            [java-time-literals.core]
             [nats.kv :as sut])
   (:import (io.nats.client.api External KeyValueConfiguration Placement Republish
                                Source SubjectTransform)
            (java.time Instant)))
+
+:java-time-literals.core/keep
 
 (deftest build-options-test
   (testing "Builds External options"
