@@ -166,7 +166,7 @@
             max-value-size
             metadata
             mirror
-            name
+            bucket-name
             placement
             replicas
             republish
@@ -181,7 +181,7 @@
     max-value-size (.maxValueSize max-value-size)
     metadata (.metadata (update-keys metadata clojure.core/name))
     mirror (.mirror (build-mirror-options mirror))
-    name (.name name)
+    bucket-name (.name bucket-name)
     placement (.placement (build-placement-options placement))
     replicas (.replicas replicas)
     republish (.republish (build-republish-options republish))
@@ -231,7 +231,7 @@
 (defn ^{:style/indent 1 :export true} create-bucket
   "Create a key/value bucket. `config` is a map of:
 
-   - `:nats.kv/name`
+   - `:nats.kv/bucket-name`
    - `:nats.kv/description`
    - `:nats.kv/replicas`
    - `:nats.kv/storage-type` - See `nats.stream/storage-types`

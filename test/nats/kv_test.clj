@@ -63,7 +63,7 @@
            :nats.kv/max-value-size 10
            :nats.kv/metadata {"Status" "Ok", :lol "Yes"}
            :nats.kv/mirror {:nats.source/name "B"}
-           :nats.kv/name "Bucket"
+           :nats.kv/bucket-name "Bucket"
            :nats.kv/placement {:nats.placement/cluster "cluster"
                                :nats.placement/tags [:a :b]}
            :nats.kv/replicas 2
