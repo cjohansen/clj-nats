@@ -4,8 +4,7 @@
             [nats.message :as message]
             [nats.stream :as stream])
   (:refer-clojure :exclude [get])
-  (:import (io.nats.client JetStreamOptions JetStreamOptions$Builder
-                           KeyValueOptions KeyValueOptions$Builder
+  (:import (io.nats.client KeyValueOptions KeyValueOptions$Builder
                            Message)
            (io.nats.client.api External External$Builder
                                KeyValueConfiguration KeyValueConfiguration$Builder
@@ -90,23 +89,9 @@
 
 ;; Build options
 
-(defn ^:no-doc build-jet-stream-options
-  [{:nats.jso/keys [domain
-                    opt-out-290-consumer-create?
-                    prefix
-                    publish-no-ack?
-                    request-timeout]}]
-  (cond-> ^JetStreamOptions$Builder (JetStreamOptions/builder)
-    domain (.domain domain)
-    opt-out-290-consumer-create? (.optOut290ConsumerCreate opt-out-290-consumer-create?)
-    prefix (.prefix prefix)
-    (boolean? publish-no-ack?) (.publishNoAck publish-no-ack?)
-    request-timeout (.requestTimeout request-timeout)
-    :then (.build)))
-
 (defn ^:no-doc build-kvo-options [{::keys [stream-options domain prefix request-timeout]}]
   (cond-> ^KeyValueOptions$Builder (KeyValueOptions/builder)
-    stream-options (.jetStreamOptions (build-jet-stream-options stream-options))
+    stream-options (.jetStreamOptions (stream/build-jet-stream-options stream-options))
     domain (.jsDomain domain)
     prefix (.jsPrefix prefix)
     request-timeout (.jsRequestTimeout request-timeout)
