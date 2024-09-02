@@ -220,7 +220,7 @@
   - `:nats.kv/request-timeout`"
   [conn key-value-options]
   (let [conn-val @conn]
-    (-> (dissoc conn-val :kvo)
+    (-> (dissoc conn-val :kvo :kvbm)
         (assoc :key-value-options key-value-options)
         atom)))
 
