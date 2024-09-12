@@ -10,7 +10,7 @@
             [nats.message :as message]
             [nats.stream :as stream])
   (:import (io.nats.client JetStreamApiException)
-           (java.time Instant)))
+           (java.time Duration Instant)))
 
 :java-time-literals.core/keep
 (set! *print-namespace-maps* false)
@@ -614,6 +614,114 @@
             ["2" "clj-nats.stream.a.2" 3 {:message "Message A.2"}]
             ["2" "clj-nats.stream.a.1" 1 {:message "Message A.1"}]
             :stream-empty]))))
+
+(defn run-delayed-message-scenario []
+  (let [conn (nats/connect "nats://localhost:4222")
+        stream-name (str "clj-nats-" (random-uuid))
+        consumer-name (str "clj-nats-" (random-uuid))
+        id (keyword stream-name consumer-name)
+        !nak-with-delay (atom {:stream-name stream-name
+                               :consumer-name consumer-name
+                               :messages []})]
+    (try
+      (stream/create-stream conn
+        {:nats.stream/name stream-name
+         :nats.stream/description "A test stream"
+         :nats.stream/subjects #{"clj-nats.stream.>"}
+         :nats.stream/retention-policy :nats.retention-policy/limits
+         :nats.stream/allow-direct? true
+         :nats.stream/allow-rollup? false
+         :nats.stream/deny-delete? false
+         :nats.stream/deny-purge? false
+         :nats.stream/max-age 1000
+         :nats.stream/max-bytes 10000
+         :nats.stream/max-consumers 10
+         :nats.stream/max-messages 20
+         :nats.stream/max-messages-per-subject 5
+         :nats.stream/max-msg-size 200
+         :nats.stream/replicas 1})
+
+      (consumer/create-consumer conn
+        {:nats.consumer/id id
+         :nats.consumer/ack-policy :nats.ack-policy/explicit
+         :nats.consumer/description "Primary stream consumer"
+         :nats.consumer/durable? true
+         :nats.consumer/deliver-policy :nats.deliver-policy/all
+         :nats.consumer/filter-subjects #{"clj-nats.stream.a.*"}})
+
+      (stream/publish conn
+        {:nats.message/subject "clj-nats.stream.a.1"
+         :nats.message/data {:message "Message A.1"}}
+        {:stream stream-name})
+
+      (stream/publish conn
+        {:nats.message/subject "clj-nats.stream.a.2"
+         :nats.message/data {:message "Message A.2"}}
+        {:stream stream-name})
+
+      (stream/publish conn
+        {:nats.message/subject "clj-nats.stream.a.3"
+         :nats.message/data {:message "Message A.3"}}
+        {:stream stream-name})
+
+      (swap! !nak-with-delay assoc
+             :pre-consumer-info (consumer/get-consumer-info conn id)
+             :consumer-names (consumer/get-consumer-names conn stream-name)
+             :consumers (consumer/get-consumers conn stream-name))
+
+      (let [subscription (consumer/subscribe conn id)
+            message (assoc (consumer/pull-message subscription 10)
+                           :test/pulled-inst (Instant/now))]
+        (swap! !nak-with-delay update :messages conj message)
+        (consumer/ack conn message)
+
+        (let [message (assoc (consumer/pull-message subscription 10)
+                             :test/pulled-inst (Instant/now))]
+          (swap! !nak-with-delay update :messages conj message)
+          (consumer/nak conn message))
+
+        (let [message (assoc (consumer/pull-message subscription 10)
+                             :test/pulled-inst (Instant/now))]
+          (swap! !nak-with-delay update :messages conj message)
+          (consumer/ack conn message))
+
+        (let [message (assoc (consumer/pull-message subscription 10)
+                             :test/pulled-inst (Instant/now))]
+          (swap! !nak-with-delay update :messages conj message)
+          (consumer/nak-with-delay conn message (Duration/ofMillis 100)))
+
+        (let [message (assoc (consumer/pull-message subscription 250)
+                             :test/pulled-inst (Instant/now))]
+          (swap! !nak-with-delay update :messages conj message)
+          (consumer/ack conn message))
+
+        ;; No more relevant messages for this consumer
+        (swap! !nak-with-delay update :messages conj
+               (or (consumer/pull-message subscription 10)
+                   :stream-empty))
+
+        (consumer/unsubscribe subscription))
+
+      (finally
+        (consumer/delete-consumer conn id)
+        (stream/delete-stream conn stream-name)))
+    (nats/close conn)
+    @!nak-with-delay))
+
+(deftest nak-with-delay
+  (let [run-results (run-delayed-message-scenario)
+        message-delay (fn [message]
+                        (when-some [pulled-inst (-> message :test/pulled-inst)]
+                          (.toMillis (Duration/between (-> message :nats.message/metadata :nats.stream.meta/timestamp) pulled-inst))))
+        [slowest & remaining] (->> run-results
+                                   :messages
+                                   (keep message-delay)
+                                   (sort)
+                                   (reverse))]
+    (testing "ack and nak without delay"
+      (is (every? #(< % 100) remaining)))
+    (testing "nak with delay"
+       (is (<= 100 slowest)))))
 
 (defmacro with-kv-bucket
   {:clj-kondo/lint-as 'clojure.core/let}
