@@ -7,7 +7,7 @@
   (:import (io.nats.client ConsumeOptions ConsumeOptions$Builder IterableConsumer)
            (io.nats.client.api AckPolicy ConsumerConfiguration ConsumerConfiguration$Builder ConsumerInfo DeliverPolicy ReplayPolicy)
            (io.nats.client.impl AckType)
-           (java.time Instant)))
+           (java.time Duration Instant)))
 
 ;; Enums as keywords
 
@@ -306,6 +306,15 @@
   (nats/publish conn
     {::message/subject (::message/reply-to message)
      ::message/data (.bodyBytes AckType/AckNak -1)}))
+
+(defn ^:export nak-with-delay
+  "Tell the server that processing was not successful, and the message should be
+  re-delivered later and after at least the provided `duration`."
+  [conn message ^Duration duration]
+  (assert (not (nil? message)) "Can't nak without a message")
+  (nats/publish conn
+    {::message/subject (::message/reply-to message)
+     ::message/data (.bodyBytes AckType/AckNak (.toNanos duration))}))
 
 (defn ^:export ack-in-progress
   "Acknowledge to the server that processing is in progress. Use this if
