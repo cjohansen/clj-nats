@@ -284,7 +284,10 @@
        (.iterate (build-consume-options opts)))))
 
 (defn ^:export pull-message [^IterableConsumer subscription timeout]
-  (some-> (.nextMessage subscription timeout) message/message->map))
+  (some-> (if (int? timeout)
+            (.nextMessage subscription ^int timeout)
+            (.nextMessage subscription ^java.time.Duration timeout))
+          message/message->map))
 
 (defn ^:export unsubscribe [^IterableConsumer subscription]
   (.close subscription)
