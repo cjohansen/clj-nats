@@ -3,12 +3,13 @@
             [nats.cluster :as cluster]
             [nats.core :as nats]
             [nats.message :as message])
-  (:import (io.nats.client JetStream JetStreamOptions JetStreamOptions$Builder
+  (:import (io.nats.client Connection JetStream JetStreamManagement
+                           JetStreamOptions JetStreamOptions$Builder
                            Message PublishOptions PublishOptions$Builder
                            PurgeOptions PurgeOptions$Builder)
            (io.nats.client.api AccountLimits AccountStatistics AccountTier ApiStats
                                CompressionOption ConsumerLimits DiscardPolicy External
-                               Placement Republish RetentionPolicy SourceBase SourceInfoBase
+                               Placement Republish RetentionPolicy SourceBase SourceInfo
                                StorageType StreamConfiguration StreamInfo StreamInfoOptions
                                StreamInfoOptions$Builder StreamState Subject SubjectTransform)))
 
@@ -134,9 +135,9 @@
       subject-transform (assoc ::subject-transform subject-transform)
       template-owner (assoc ::template-owner template-owner))))
 
-(defn ^:no-doc source-info->map [^SourceInfoBase info]
+(defn ^:no-doc source-info->map [^SourceInfo info]
   (let [error (.getError info)
-        external (some-> (.getExternal info) external->map)
+        external (some-> ^External (.getExternal info) external->map)
         subject-transforms (map subject-transform->map (.getSubjectTransforms info))]
     (cond-> {:nats.source/active (.getActive info)
              :nats.source/lag (.getLag info)
@@ -210,23 +211,21 @@
 (defn ^:no-doc build-stream-configuration
   [{::keys [description
             subjects
-            retention-policy
-            allow-direct?
-            allow-rollup?
-            deny-delete?
-            deny-purge?
-            max-age
-            max-bytes
-            max-consumers
-            max-messages
-            max-messages-per-subject
-            max-msg-size
-            replicas] :as opts}]
+            ^RetentionPolicy retention-policy
+            ^boolean allow-direct?
+            ^boolean allow-rollup?
+            ^boolean deny-delete?
+            ^boolean deny-purge?
+            ^long max-age
+            ^long max-bytes
+            ^long max-consumers
+            ^long max-messages
+            ^long max-messages-per-subject
+            ^int max-msg-size
+            ^int replicas] :as opts}]
   (cond-> (StreamConfiguration/builder)
     (::name opts) (.name (::name opts))
     description (.description description)
-    subjects (.subjects (into-array String subjects))
-    retention-policy (.retentionPolicy (retention-policies retention-policy))
     (boolean? allow-direct?) (.allowDirect allow-direct?)
     (boolean? allow-rollup?) (.allowRollup allow-rollup?)
     (boolean? deny-delete?) (.denyDelete deny-delete?)
@@ -238,6 +237,8 @@
     max-messages-per-subject (.maxMessagesPerSubject max-messages-per-subject)
     max-msg-size (.maxMsgSize max-msg-size)
     replicas (.replicas replicas)
+    subjects (.subjects (into-array String subjects))
+    retention-policy (.retentionPolicy (retention-policies retention-policy))
     :always (.build)))
 
 (defn ^:no-doc build-publish-options
@@ -281,15 +282,15 @@
 
 ;; Helper functions
 
-(defn ^:no-doc jet-stream-management [nats-conn]
-  (let [{:keys [jsm conn jet-stream-options]} @nats-conn]
+(defn ^:no-doc jet-stream-management ^JetStreamManagement [nats-conn]
+  (let [{:keys [jsm ^Connection conn jet-stream-options]} @nats-conn]
     (when-not jsm
       (->> (build-jet-stream-options jet-stream-options)
            (.jetStreamManagement conn)
            (swap! nats-conn assoc :jsm))))
   (:jsm @nats-conn))
 
-(defn ^:no-doc get-stream-info-object
+(defn ^:no-doc get-stream-info-object ^StreamInfo
   [conn stream-name & [{:keys [include-deleted-details?
                                filter-subjects]}]]
   (-> (jet-stream-management conn)
