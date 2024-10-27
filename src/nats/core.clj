@@ -2,7 +2,8 @@
   (:require [clojure.set :as set]
             [clojure.string :as str]
             [nats.message :as message])
-  (:import (io.nats.client ConnectionListener
+  (:import (io.nats.client Connection
+                           ConnectionListener
                            ConnectionListener$Events
                            ErrorListener
                            Nats
@@ -56,8 +57,9 @@
    (Nats/credentials jwt-file-path nkey-file-path)))
 
 (defn- strbytes [s]
-  (cond-> s
-    (string? s) .getBytes))
+  (if (string? s)
+    (.getBytes ^String s)
+    s))
 
 (defn ^:export create-static-auth-handler
   "Creates an `io.nats.client.AuthHandler` for a credential string, or a pair of JWT and nkey strings.
@@ -283,7 +285,7 @@
 
 (def ^:no-doc connection-event->k (set/map-invert connection-events))
 
-(defn build-options
+(defn build-options ^Options
   [{::keys [auth-handler ;; AuthHandler
             buffer-size
             client-side-limit-checks
@@ -322,25 +324,25 @@
             pedantic?
             ping-interval ;; Duration / ms
             reconnect-buffer-size
-            reconnect-jitter ;; Duration
-            reconnect-jitter-tls ;; Duration
-            reconnect-wait ;; Duration
+            ^java.time.Duration reconnect-jitter
+            ^java.time.Duration reconnect-jitter-tls
+            ^java.time.Duration reconnect-wait
             report-no-responders?
-            request-cleanup-interval ;; Duration
+            ^java.time.Duration request-cleanup-interval
             secure?
             server-pool ;; https://javadoc.io/static/io.nats/jnats/2.19.0/io/nats/client/ServerPool.html
             server-url
             server-urls
-            ssl-context ;; javax.net.ssl.SSLContext
+            ^javax.net.ssl.SSLContext ssl-context
             socket-so-linger ;; "SO LINGER" in seconds
             socket-write-timeout ;; Duration / ms
             statistics-collector
             utf8-subjects?
             tls-algorithm
             tls-first?
-            token ;; char[]
+            ^chars token ;; char[]
             trace-connection?
-            truststore-password ;; char[]
+            ^chars truststore-password ;; char[]
             truststore-path
             advanced-stats?
             use-dispatcher-with-executor?
@@ -361,7 +363,8 @@
                            (connectionEvent [_this conn event]
                              (connection-listener (get @connections conn) (connection-event->k event)))))
     connection-name (.connectionName connection-name)
-    connection-timeout (.connectionTimeout connection-timeout)
+    (int? connection-timeout) (.connectionTimeout ^long connection-timeout)
+    (instance? java.time.Duration connection-timeout) (.connectionTimeout ^java.time.Duration connection-timeout)
     credentials-file-path (.credentialPath credentials-file-path)
     data-port-type (.dataPortType data-port-type)
     discard-messages-when-outgoing-queue-full? (.discardMessagesWhenOutgoingQueueFull)
@@ -401,14 +404,15 @@
     reconnect-jitter (.reconnectJitter reconnect-jitter)
     reconnect-jitter-tls (.reconnectJitterTls reconnect-jitter-tls)
     reconnect-wait (.reconnectWait reconnect-wait)
-    report-no-responders? (.reportNoResponders report-no-responders?)
+    report-no-responders? (.reportNoResponders)
     request-cleanup-interval (.requestCleanupInterval request-cleanup-interval)
     secure? (.secure)
-    server-url (.server server-url)
-    server-pool (.serverPool server-pool)
+    server-url (.server ^String server-url)
+    server-pool (.serverPool ^io.nats.client.ServerPool server-pool)
     server-urls (.servers server-urls)
-    socket-so-linger (.socketSoLinger socket-so-linger)
-    socket-write-timeout (.socketWriteTimeout socket-write-timeout)
+    socket-so-linger (.socketSoLinger ^int socket-so-linger)
+    (int? socket-write-timeout) (.socketWriteTimeout ^int socket-write-timeout)
+    (instance? java.time.Duration socket-write-timeout) (.socketWriteTimeout ^java.time.Duration socket-write-timeout)
     ssl-context (.sslContext ssl-context)
     ;; Because the SSLContextFactory interface is in the "impl" namespace, we'll
     ;; leave .sslContextFactory unexposed until someone complains.
@@ -426,7 +430,7 @@
     truststore-path (.truststorePath truststore-path)
     advanced-stats? (.turnOnAdvancedStats)
     use-dispatcher-with-executor? (.useDispatcherWithExecutor)
-    (and user-name password) (.userInfo user-name password)
+    (and user-name password) (.userInfo ^String user-name ^String password)
     use-timeout-exception? (.useTimeoutException)
     verbose? (.verbose)
     :always (.build)))
@@ -508,16 +512,16 @@
   - `:nats.core/use-timeout-exception?`
   - `:nats.core/verbose?`"
   [server-url-or-options & [{:keys [jet-stream-options key-value-options]}]]
-  (let [conn (Nats/connect (cond-> server-url-or-options
-                             (not (string? server-url-or-options))
-                             build-options))
+  (let [conn (if (string? server-url-or-options)
+               (Nats/connect ^String server-url-or-options)
+               (Nats/connect (build-options server-url-or-options)))
         clj-conn (atom {:conn conn
                         :jet-stream-options jet-stream-options
                         :key-value-options key-value-options})]
     (swap! connections assoc conn clj-conn)
     clj-conn))
 
-(defn ^:no-doc get-connection [conn]
+(defn ^:no-doc get-connection ^Connection [conn]
   (:conn @conn))
 
 (defn ^:export close [conn]
@@ -552,7 +556,10 @@
     (.subscribe (get-connection conn) subject)))
 
 (defn ^:export pull-message [^Subscription subscription timeout]
-  (some-> (.nextMessage subscription timeout) message/message->map))
+  (some-> (if (int? timeout)
+            (.nextMessage subscription ^int timeout)
+            (.nextMessage subscription ^java.time.Duration timeout))
+          message/message->map))
 
 (defn ^:export unsubscribe [^Subscription subscription]
   (.unsubscribe subscription)
