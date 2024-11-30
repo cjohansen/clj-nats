@@ -7,7 +7,7 @@ Install:
 
 ```clj
 no.cjohansen/clj-nats {:git/url "https://github.com/cjohansen/clj-nats"
-                       :sha "LATEST_SHA"}
+                       :git/sha "LATEST_SHA"}
 ```
 
 The current jnats version is `2.20.2`.
