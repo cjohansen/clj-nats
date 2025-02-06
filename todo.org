@@ -1,0 +1,3 @@
+* Features [0/2]
+** TODO Handle edn messages that don't read-string well
+** TODO nats.core/get-conn Fail with a better error when conn is not an atom/not a proper connection
