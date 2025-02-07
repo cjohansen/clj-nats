@@ -10,13 +10,12 @@ no.cjohansen/clj-nats {:git/url "https://github.com/cjohansen/clj-nats"
                        :git/sha "LATEST_SHA"}
 ```
 
-The current jnats version is `2.20.2`.
+The current jnats version is `2.20.5`.
 
 ## Status
 
-The API is still under development and is subject to change. Once set, it will
-remain backwards compatible. An official release is expected in August 2024.
-Until then, use at risk of breaking changes.
+The API is stable but incomplete. Specifically, the object store APIs are not
+implemented.
 
 - [x] PubSub
 - [x] Streams
@@ -357,5 +356,5 @@ make test
 
 ## License
 
-Copyright © 2024 Christian Johansen Distributed under the Eclipse Public License
-either version 1.0 or (at your option) any later version.
+Copyright © 2024-2025 Christian Johansen Distributed under the Eclipse Public
+License either version 1.0 or (at your option) any later version.
