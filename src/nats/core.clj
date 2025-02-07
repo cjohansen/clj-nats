@@ -13,7 +13,7 @@
                            StatisticsCollector
                            Subscription
                            TimeTraceLogger)
-           (java.time ZoneId)))
+           (java.time Duration ZoneId)))
 
 (def ^:no-doc connections (atom {}))
 
@@ -576,12 +576,27 @@
   - `:nats.message/headers` - An optional map of string keys to string (or
   collection of string) values to set as meta-data on the message.
 
-  In request/response, `:nats.message/reply-to` is reserved for the server."
-  [conn message]
-  (assert (not (nil? (::message/subject message))) "Can't publish without data")
-  (assert (not (nil? (::message/data message))) "Can't publish nil data")
-  (future
-    (->> (message/build-message (dissoc message :nats.message/reply-to))
-         (.request (get-connection conn))
-         deref
-         message/message->map)))
+  In request/response, `:nats.message/reply-to` is reserved for the server.
+
+  `timeout` is optional, and either a number of milliseconds to wait, or a
+  `java.time.Duration`."
+  ([conn message]
+   (assert (not (nil? (::message/subject message))) "Can't make request without data")
+   (assert (not (nil? (::message/data message))) "Can't make request nil data")
+   (future
+     (->> (message/build-message (dissoc message :nats.message/reply-to))
+          (.request (get-connection conn))
+          deref
+          message/message->map)))
+  ([conn message timeout]
+   (assert (not (nil? (::message/subject message))) "Can't make request without data")
+   (assert (not (nil? (::message/data message))) "Can't make request nil data")
+   (assert (or (number? timeout) (instance? Duration timeout)) "timeout should be millis (number) or Duration")
+   (future
+     (->> (message/build-message (dissoc message :nats.message/reply-to))
+          (.requestWithTimeout
+           (get-connection conn)
+           (cond-> timeout
+             (number? timeout) Duration/ofMillis))
+          deref
+          message/message->map))))
