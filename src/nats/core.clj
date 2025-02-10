@@ -593,9 +593,9 @@
    (assert (not (nil? (::message/data message))) "Can't make request nil data")
    (assert (or (number? timeout) (instance? Duration timeout)) "timeout should be millis (number) or Duration")
    (future
-     (->> (message/build-message (dissoc message :nats.message/reply-to))
-          (.requestWithTimeout
+     (->> (.requestWithTimeout
            (get-connection conn)
+           (message/build-message (dissoc message :nats.message/reply-to))
            (cond-> timeout
              (number? timeout) Duration/ofMillis))
           deref
