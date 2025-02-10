@@ -4,10 +4,13 @@ src/io/nats/client/impl/CljNatsKeyValue.class:
 test:
 	clojure -M:dev -m kaocha.runner
 
-clj-nats.jar: src/io/nats/client/impl/CljNatsKeyValue.class
-	rm -f clj-nats.jar && clojure -M:jar
+clean:
+	rm -f clj-nats.jar
 
-deploy: clj-nats.jar
+clj-nats.jar: src/io/nats/client/impl/CljNatsKeyValue.class
+	clojure -M:jar
+
+deploy: clean clj-nats.jar
 	mvn deploy:deploy-file -Dfile=clj-nats.jar -DrepositoryId=clojars -Durl=https://clojars.org/repo -DpomFile=pom.xml
 
-.PHONY: test deploy
+.PHONY: clean test deploy
