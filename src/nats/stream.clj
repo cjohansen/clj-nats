@@ -216,7 +216,7 @@
             ^boolean allow-rollup?
             ^boolean deny-delete?
             ^boolean deny-purge?
-            ^long max-age
+            max-age
             ^long max-bytes
             ^long max-consumers
             ^long max-messages
