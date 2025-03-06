@@ -284,10 +284,19 @@
        (.iterate (build-consume-options opts)))))
 
 (defn ^:export pull-message [^IterableConsumer subscription timeout]
-  (some-> (if (int? timeout)
-            (.nextMessage subscription ^int timeout)
-            (.nextMessage subscription ^java.time.Duration timeout))
-          message/message->map))
+  ;; Work around a bug in jnats where network outages will cause `.nextMessage`
+  ;; to wait for the full timeout and return `nil`, even when there are more
+  ;; messages on the stream.
+  (let [timeout (if (instance? java.time.Duration timeout)
+                  (.toMillis ^java.time.Duration timeout)
+                  timeout)]
+    (loop [elapsed 0]
+      (when (< elapsed timeout)
+        (let [wait (min 100 (- timeout elapsed))]
+          (if-let [message (some-> (.nextMessage subscription wait)
+                                   message/message->map)]
+            message
+            (recur (+ elapsed wait))))))))
 
 (defn ^:export unsubscribe [^IterableConsumer subscription]
   (.close subscription)
