@@ -16,13 +16,19 @@
   (is (false? (sut/covers-subject? #{"clj-nats.>"} "clj-nats"))))
 
 (deftest create-subject-test
-  (is (= (sut/create-subject ["clj-nats" "christian" "command"] "-")
-         "clj-nats.christian.command"))
-  (testing "replaces disallowed characters with string"
-    (is (= (sut/create-subject ["clj-nats.*.command.>"] "-")
-           "clj-nats-command-")))
-  (testing "replaces disallowed characters with a function of replaced characters"
+  (testing "joins parts into subject"
+    (is (= (sut/create-subject ["clj-nats" "christian" "command"])
+           "clj-nats.christian.command")))
+
+  (testing "replaces not-recommended characters with a default"
+    (is (= (sut/create-subject ["clj-nats.*.command.>"])
+           "clj-nats_command_")))
+
+  (testing "replaces not-recommended characters with a chosen replacement"
+    (is (= (sut/create-subject ["clj-nats.*.command.>"] "R")
+           "clj-natsRcommandR")))
+
+  (testing "replaces not-recommended characters with a function of replaced characters"
     (is (= (sut/create-subject ["clj-nats.*.command.>"]
-                               (fn [replaced]
-                                 (apply str (repeat (count replaced) "X"))))
+                               #(apply str (repeat (count %) "X")))
            "clj-natsXXXcommandXX"))))

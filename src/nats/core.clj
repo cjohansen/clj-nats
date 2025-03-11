@@ -54,15 +54,18 @@
   recommend using only a-z, A-Z, 0-9, - and _. create-subject replaces any
   not-recommended characters in subject parts with replacement.
 
-  replacement is a string or a function of the replaced characters.
+  replacement (default \"_\") is a string or a function of the replaced
+  characters
 
   References:
   - NATS Docs, \"Characters allowed and recommended for subject names\"
     https://docs.nats.io/nats-concepts/subjects#characters-allowed-and-recommended-for-subject-names"
-  [parts replacement]
-  (->> parts
-       (map #(str/replace % #"[^a-zA-Z0-9_-]+" replacement))
-       (str/join ".")))
+  ([parts]
+   (create-subject parts "_"))
+  ([parts replacement]
+   (->> parts
+        (map #(str/replace % #"[^a-zA-Z0-9_-]+" replacement))
+        (str/join "."))))
 
 (defn ^:export create-file-auth-handler
   "Creates an `io.nats.client.AuthHandler` for a credentials file, or a jwt-file
