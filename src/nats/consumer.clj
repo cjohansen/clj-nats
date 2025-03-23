@@ -69,7 +69,7 @@
              ::durable (.getDurable config)
              ::filter-subjects (.getFilterSubjects config)
              ::idle-heartbeat (.getIdleHeartbeat config)
-             ::inactve-threshold (.getInactiveThreshold config)
+             ::inactive-threshold (.getInactiveThreshold config)
              ::max-ack-pending (.getMaxAckPending config)
              ::max-batch (.getMaxBatch config)
              ::max-bytes (.getMaxBytes config)

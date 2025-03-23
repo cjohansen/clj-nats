@@ -526,7 +526,7 @@
              :nats.consumer/metadata {}
              :nats.consumer/sample-frequency nil
              :nats.consumer/rate-limit-was-set? false
-             :nats.consumer/inactve-threshold nil
+             :nats.consumer/inactive-threshold nil
              :nats.consumer/max-deliver-was-set? true
              :nats.consumer/pause-until nil
              :nats.consumer/max-expires nil
