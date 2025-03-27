@@ -10,7 +10,7 @@ no.cjohansen/clj-nats {:git/url "https://github.com/cjohansen/clj-nats"
                        :git/sha "LATEST_SHA"}
 ```
 
-The current jnats version is `2.20.5`.
+The current jnats version is `2.21.0`.
 
 ## Status
 
