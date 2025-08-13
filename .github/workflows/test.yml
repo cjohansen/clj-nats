@@ -43,6 +43,5 @@ jobs:
           key: ${{ runner.os }}-gitlibs-test-${{ hashFiles('deps.edn') }}
           restore-keys: |
             ${{ runner.os }}-gitlibs-test
-          text: ":safety_vest: Kjører tester …"
       - name: Test
         run: make test
