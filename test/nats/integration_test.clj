@@ -41,6 +41,16 @@
     (nats/close conn)
     {:messages @messages}))
 
+(defn make-stream-config-comparable [data]
+  (walk/postwalk
+   (fn [x]
+     (cond-> x
+       (or (get x "_nats.level")
+           (get x "_nats.req.level")
+           (get x "_nats.ver"))
+       (dissoc "_nats.level" "_nats.req.level" "_nats.ver")))
+   data))
+
 (deftest pubsub-test
   (testing "Receives messages"
     (is (= (->> (run-pubsub-scenario)
@@ -226,8 +236,9 @@
             string?)))
 
   (testing "Inspects stream configuration"
-    (is (= (dissoc (:stream-config (run-stream-scenario))
-                   :nats.stream/name)
+    (is (= (-> (:stream-config (run-stream-scenario))
+               (dissoc :nats.stream/name)
+               make-stream-config-comparable)
            {:nats.stream/allow-direct? true
             :nats.stream/max-msgs 20
             :nats.stream/no-ack? false
@@ -343,8 +354,9 @@
                                 :nats.stream/name
                                 :nats.stream/configuration))
                   first
-                  :nats.stream/configuration)
-             (:stream-config res)))))
+                  :nats.stream/configuration
+                  make-stream-config-comparable)
+             (make-stream-config-comparable (:stream-config res))))))
 
   (testing "Gets account statistics from the server"
     (is (not (nil? (->> (:account-statistics (run-stream-scenario))
@@ -487,8 +499,9 @@
     (is (= (-> (run-consumer-scenario)
                :pre-consumer-info
                (dissoc :nats.consumer/timestamp
-                       :nats.consumer/creation-time))
-           {:nats.consumer/id :TEST_STREAM_NAME/TEST_CONSUMER_NAME,
+                       :nats.consumer/creation-time)
+               make-stream-config-comparable)
+           {:nats.consumer/id :TEST_STREAM_NAME/TEST_CONSUMER_NAME
             :nats.consumer/stream-name "TEST_STREAM_NAME"
             :nats.consumer/name "TEST_CONSUMER_NAME"
             :nats.consumer/pause-remaining nil
@@ -516,7 +529,7 @@
              :nats.consumer/headers-only? false
              :nats.consumer/flow-control-was-set? false
              :nats.consumer/max-ack-pending-was-set? true
-             :nats.consumer/metadata-was-set? false
+             :nats.consumer/metadata-was-set? true
              :nats.consumer/mem-storage? false
              :nats.consumer/replicas 0
              :nats.consumer/flow-control? false
@@ -751,7 +764,8 @@
                 (remove-ks #{:nats.stream/create-time
                              :nats.stream/timestamp
                              :nats.stream/last-time
-                             :nats.stream/first-time}))
+                             :nats.stream/first-time})
+                make-stream-config-comparable)
            {:nats.kv/byte-count 0
             :nats.kv/entry-count 0
             :nats.kv/max-value-size -1
@@ -765,6 +779,7 @@
             :nats.kv/description "A nice little bucket"
             :nats.kv/bucket-name "clj-nats-test"
             :nats.kv/ttl #time/dur "PT0S"
+            :nats.kv/metadata {}
             :nats.kv/replicas 1
             :nats.kv/stream-info
             {:nats.stream/configuration
