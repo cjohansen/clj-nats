@@ -8,8 +8,9 @@
                            Message)
            (io.nats.client.api External External$Builder
                                KeyValueConfiguration KeyValueConfiguration$Builder
-                               KeyValueOperation KeyValueStatus
+                               KeyValueEntry KeyValueOperation KeyValueStatus
                                KeyValuePurgeOptions KeyValuePurgeOptions$Builder
+                               KeyValueWatcher KeyValueWatchOption
                                MessageInfo Mirror Mirror$Builder
                                Placement Placement$Builder
                                Republish Republish$Builder
@@ -33,6 +34,20 @@
    :nats.kv-operation/put KeyValueOperation/PUT})
 
 (def ^:no-doc operation->k (set/map-invert operations))
+
+(def watch-options
+  {:nats.kv.watch-option/ignore-delete KeyValueWatchOption/IGNORE_DELETE
+   :nats.kv.watch-option/include-history KeyValueWatchOption/INCLUDE_HISTORY
+   :nats.kv.watch-option/meta-only KeyValueWatchOption/META_ONLY
+   :nats.kv.watch-option/updates-only KeyValueWatchOption/UPDATES_ONLY})
+
+;; Interfaces
+
+(definterface PrefixedConsumer
+  ;; This allows us to override the getConsumerNamePrefix in KeyValueWatcher.
+  ;; Because it is implemented with a default method,
+  ;; Clojure cannot see it as part of the interface.
+  (^String getConsumerNamePrefix []))
 
 ;; Map data classes to maps
 
@@ -86,6 +101,14 @@
      :nats.kv.entry/operation (operation->k (NatsKeyValueUtil/getOperation headers))
      :nats.kv.entry/revision (.streamSequence (.metaData msg))
      :nats.kv.entry/value (message/get-message-data (message/headers->map headers) (.getData msg))}))
+
+(defn native->key-value-entry [^KeyValueEntry entry]
+  {:nats.kv.entry/bucket (.getBucket entry)
+   :nats.kv.entry/key (.getKey entry)
+   :nats.kv.entry/created-at (.toInstant (.getCreated entry))
+   :nats.kv.entry/operation (operation->k (.getOperation entry))
+   :nats.kv.entry/revision (.getRevision entry)
+   :nats.kv.entry/value (.getValueAsString entry)})
 
 ;; Build options
 
@@ -431,3 +454,29 @@
    (cond-> ^KeyValuePurgeOptions$Builder (KeyValuePurgeOptions/builder)
      delete-marker-threshold (.deleteMarkersThreshold delete-marker-threshold)
      :then .build)))
+
+(defn ^:export watch
+  ([conn bucket-name watcher]
+   (watch conn bucket-name nil nil watcher nil))
+  ([conn bucket-name watcher watch-opts]
+   (watch conn bucket-name nil nil watcher watch-opts))
+  ([conn bucket-name subjects watcher watch-opts]
+   (watch conn bucket-name subjects nil watcher watch-opts))
+  ([conn bucket-name subjects from-rev {:keys [watch end-of-data consumer-name-prefix]} watch-opts]
+   (let [subjects (cond
+                    (nil? subjects) [">"]
+                    (string? subjects) [subjects]
+                    (instance? java.util.List subjects) subjects
+                    (seqable? subjects) (vec subjects)
+                    :else subjects)]
+     (.watch (kv-management conn bucket-name)
+             ^java.util.List subjects
+             (reify
+               KeyValueWatcher
+               (watch [_ e] (watch (native->key-value-entry e)))
+               (endOfData [_] (when end-of-data (end-of-data)))
+
+               PrefixedConsumer
+               (getConsumerNamePrefix [_] consumer-name-prefix))
+             (or from-rev -1)
+             (into-array KeyValueWatchOption (map watch-options watch-opts))))))
