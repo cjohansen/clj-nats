@@ -1,0 +1,48 @@
+name: Run tests for clj-nats
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '**/README.md'
+      - '.lsp/**'
+      - 'natsbyexample/**'
+      - 'todo.org'
+      - '.gitignore'
+
+concurrency: ci
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+      - name: Install clojure tools
+        uses: DeLaGuardo/setup-clojure@13.4
+        with:
+          cli: 1.12.1.1550
+      - name: Cache maven build deps
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-clojure-test-${{ hashFiles('deps.edn') }}
+          restore-keys: |
+            ${{ runner.os }}-clojure-test
+      - name: Cache gitlibs
+        uses: actions/cache@v4
+        with:
+          path: ~/.gitlibs
+          key: ${{ runner.os }}-gitlibs-test-${{ hashFiles('deps.edn') }}
+          restore-keys: |
+            ${{ runner.os }}-gitlibs-test
+          text: ":safety_vest: Kjører tester …"
+      - name: Test
+        run: make test
