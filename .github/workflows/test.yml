@@ -12,6 +12,9 @@ on:
       - 'todo.org'
       - '.gitignore'
 
+env:
+  NATS_VERSION: 'v2.11.8'
+
 concurrency: ci
 
 jobs:
@@ -29,6 +32,15 @@ jobs:
         uses: DeLaGuardo/setup-clojure@13.4
         with:
           cli: 1.12.1.1550
+      - name: Cache nats-server
+        users: actions/cache@v4
+        with:
+          path: ~/nats-server-${{ env.NATS_VERSION }}-linux-386
+          key: ${{ runner.os }}-nats-server-{{ env.NATS_VERSION }}
+      - name: Install NATS server
+        run: |
+          curl -O https://github.com/nats-io/nats-server/releases/download/${{ env.NATS_VERSION }}/nats-server-${{ env.NATS_VERSION }}-linux-386.tar.gz
+          tar -xzf nats-server-${{ env.NATS_VERSION }}-linux-386.tar.gz
       - name: Cache maven build deps
         uses: actions/cache@v4
         with:
@@ -44,4 +56,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gitlibs-test
       - name: Test
-        run: make test
+        run: |
+          nats-server-${{ env.NATS_VERSION }}-linux-386/nats-server &
+          make test
