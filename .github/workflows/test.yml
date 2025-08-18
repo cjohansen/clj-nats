@@ -33,7 +33,7 @@ jobs:
         with:
           cli: 1.12.1.1550
       - name: Cache nats-server
-        users: actions/cache@v4
+        uses: actions/cache@v4
         with:
           path: ~/nats-server-${{ env.NATS_VERSION }}-linux-386
           key: ${{ runner.os }}-nats-server-{{ env.NATS_VERSION }}
