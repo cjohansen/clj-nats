@@ -33,14 +33,16 @@ jobs:
         with:
           cli: 1.12.1.1550
       - name: Cache nats-server
+        id: nats-server-cache
         uses: actions/cache@v4
         with:
           path: ~/nats-server-${{ env.NATS_VERSION }}-linux-amd64
           key: ${{ runner.os }}-nats-server-{{ env.NATS_VERSION }}
-      - name: Download NATS server
-        run: curl -O https://github.com/nats-io/nats-server/releases/download/${{ env.NATS_VERSION }}/nats-server-${{ env.NATS_VERSION }}-linux-amd64.tar.gz
       - name: Install NATS server
-        run: tar -xzf nats-server-${{ env.NATS_VERSION }}-linux-amd64.tar.gz
+        if: steps.nats-server-cache.outputs.cache-hit != 'true'
+        run: |
+          curl -LO https://github.com/nats-io/nats-server/releases/download/${{ env.NATS_VERSION }}/nats-server-${{ env.NATS_VERSION }}-linux-amd64.tar.gz
+          tar -xzf nats-server-${{ env.NATS_VERSION }}-linux-amd64.tar.gz
       - name: Cache maven build deps
         uses: actions/cache@v4
         with:
@@ -57,5 +59,5 @@ jobs:
             ${{ runner.os }}-gitlibs-test
       - name: Test
         run: |
-          nats-server-${{ env.NATS_VERSION }}-linux-amd64/nats-server &
+          nats-server-${{ env.NATS_VERSION }}-linux-amd64/nats-server -js &
           make test
