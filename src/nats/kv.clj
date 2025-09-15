@@ -113,7 +113,18 @@
 ;; Build options
 
 (defn ^:no-doc build-kvo-options [{::keys [stream-options domain prefix request-timeout]}]
-  (cond-> ^KeyValueOptions$Builder (KeyValueOptions/builder)
+  (cond-> (proxy [KeyValueOptions$Builder] []
+            (jetStreamOptions [options]
+              (proxy-super jetStreamOptions options))
+
+            (jsDomain [domain]
+              (proxy-super jsDomain domain))
+
+            (jsPrefix [prefix]
+              (proxy-super jsPrefix prefix))
+
+            (jsRequestTimeout [request-timeout]
+              (proxy-super jsRequestTimeout request-timeout)))
     stream-options (.jetStreamOptions (stream/build-jet-stream-options stream-options))
     domain (.jsDomain domain)
     prefix (.jsPrefix prefix)
