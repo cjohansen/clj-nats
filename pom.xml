@@ -4,7 +4,7 @@
   <packaging>jar</packaging>
   <groupId>no.cjohansen</groupId>
   <artifactId>clj-nats</artifactId>
-  <version>0.2025.09.15</version>
+  <version>0.2025.12.1</version>
   <name>clj-nats</name>
   <dependencies>
     <dependency>
@@ -33,7 +33,7 @@
   <scm>
     <connection>scm:git:git://github.com/cjohansen/clj-nats.git</connection>
     <developerConnection>scm:git:ssh://git@github.com/cjohansen/clj-nats.git</developerConnection>
-    <tag>v0.2025.09.15</tag>
+    <tag>v0.2025.12.1</tag>
     <url>https://github.com/cjohansen/clj-nats</url>
   </scm>
 </project>
