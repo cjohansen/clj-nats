@@ -560,7 +560,7 @@
              :nats.consumer/mem-storage-was-set? false
              :nats.consumer/filter-subject "clj-nats.stream.a.*"
              :nats.consumer/max-pull-waiting 512
-             :nats.consumer/backoff-was-set? true
+             :nats.consumer/backoff-was-set? false
              :nats.consumer/start-seq-was-set? false
              :nats.consumer/max-ack-pending 1000}})))
 

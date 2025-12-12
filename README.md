@@ -47,6 +47,15 @@ clj-nats automatically encodes and decodes EDN messages when appropriate. No
 need to convert messages to binary by hand. clj-nats sets a header on your
 messages to do this safely and transparently.
 
+EDN is parsed using `clojure.edn/read-string`. You can pass options to the
+reader when you establish a connection:
+
+```clj
+(require '[nats.core :as nats])
+
+(def conn (nats/connect "nats://localhost:4222" {:edn-reader-opts {,,,}}))
+```
+
 ### Opinionated (smaller) feature subset
 
 clj-nats wraps a subset of jnats. jnats offers many ways to solve most tasks.

@@ -134,7 +134,7 @@
 
     (messageDiscarded [_this conn message]
       (when (ifn? message-discarded)
-        (message-discarded (get @connections conn) (message/message->map message))))
+        (message-discarded (get @connections conn) (message/message->map @conn message))))
 
     (pullStatusError [_this conn subscription status]
       (when (ifn? pull-status-error)
@@ -531,11 +531,12 @@
   - `:nats.core/time-trace`
   - `:nats.core/use-timeout-exception?`
   - `:nats.core/verbose?`"
-  [server-url-or-options & [{:keys [jet-stream-options key-value-options]}]]
+  [server-url-or-options & [{:keys [jet-stream-options key-value-options edn-reader-opts]}]]
   (let [conn (if (string? server-url-or-options)
                (Nats/connect ^String server-url-or-options)
                (Nats/connect (build-options server-url-or-options)))
         clj-conn (atom {:conn conn
+                        :edn-reader-opts edn-reader-opts
                         :jet-stream-options jet-stream-options
                         :key-value-options key-value-options})]
     (swap! connections assoc conn clj-conn)
@@ -571,18 +572,23 @@
   "Subscribe to non-stream subject. For JetStream subjects, instead use
   `nats.stream/subscribe`. Pull messages with `nats.core/pull-message`."
   [conn subject & [queue-name]]
-  (if queue-name
-    (.subscribe (get-connection conn) subject queue-name)
-    (.subscribe (get-connection conn) subject)))
+  (atom
+   (-> (dissoc @conn :conn)
+       (assoc :subscription
+              (if queue-name
+                (.subscribe (get-connection conn) subject queue-name)
+                (.subscribe (get-connection conn) subject))))))
 
-(defn ^:export pull-message [^Subscription subscription timeout]
-  (some-> (if (int? timeout)
-            (.nextMessage subscription ^int timeout)
-            (.nextMessage subscription ^java.time.Duration timeout))
-          message/message->map))
+(defn ^:export pull-message [subscription timeout]
+  (let [{:keys [^Subscription subscription] :as opt} @subscription]
+    (some->> (if (int? timeout)
+               (.nextMessage subscription ^int timeout)
+               (.nextMessage subscription ^java.time.Duration timeout))
+             (message/message->map opt))))
 
-(defn ^:export unsubscribe [^Subscription subscription]
-  (.unsubscribe subscription)
+(defn ^:export unsubscribe [subscription]
+  (let [{:keys [^Subscription subscription]} @subscription]
+    (.unsubscribe subscription))
   nil)
 
 (defn ^{:style/indent 1 :export true} request
@@ -604,19 +610,19 @@
    (assert (not (nil? (::message/subject message))) "Can't make request without data")
    (assert (not (nil? (::message/data message))) "Can't make request nil data")
    (future
-     (->> (message/build-message (dissoc message :nats.message/reply-to))
-          (.request (get-connection conn))
-          deref
-          message/message->map)))
+     (message/message->map @conn
+       (->> (message/build-message (dissoc message :nats.message/reply-to))
+            (.request (get-connection conn))
+            deref))))
   ([conn message timeout]
    (assert (not (nil? (::message/subject message))) "Can't make request without data")
    (assert (not (nil? (::message/data message))) "Can't make request nil data")
    (assert (or (number? timeout) (instance? Duration timeout)) "timeout should be millis (number) or Duration")
    (future
-     (->> (.requestWithTimeout
-           (get-connection conn)
-           (message/build-message (dissoc message :nats.message/reply-to))
-           (cond-> timeout
-             (number? timeout) Duration/ofMillis))
-          deref
-          message/message->map))))
+     (message/message->map @conn
+       (->> (.requestWithTimeout
+             (get-connection conn)
+             (message/build-message (dissoc message :nats.message/reply-to))
+             (cond-> timeout
+               (number? timeout) Duration/ofMillis))
+            deref)))))

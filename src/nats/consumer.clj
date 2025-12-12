@@ -279,27 +279,32 @@
      (subscribe conn (namespace id) (name id) opts)
      (subscribe conn id opts {})))
   ([conn stream-name consumer-name opts]
-   (-> (.getStreamContext (nats/get-connection conn) stream-name)
-       (.getConsumerContext consumer-name)
-       (.iterate (build-consume-options opts)))))
+   (atom
+    (-> (dissoc @conn :conn)
+        (assoc :subscription
+               (-> (.getStreamContext (nats/get-connection conn) stream-name)
+                   (.getConsumerContext consumer-name)
+                   (.iterate (build-consume-options opts))))))))
 
-(defn ^:export pull-message [^IterableConsumer subscription timeout]
+(defn ^:export pull-message [subscription timeout]
   ;; Work around a bug in jnats where network outages will cause `.nextMessage`
   ;; to wait for the full timeout and return `nil`, even when there are more
   ;; messages on the stream.
-  (let [timeout (if (instance? java.time.Duration timeout)
+  (let [{:keys [^IterableConsumer subscription] :as opt} @subscription
+        timeout (if (instance? java.time.Duration timeout)
                   (.toMillis ^java.time.Duration timeout)
                   timeout)]
     (loop [elapsed 0]
       (when (< elapsed timeout)
         (let [wait (min 100 (- timeout elapsed))]
-          (if-let [message (some-> (.nextMessage subscription wait)
-                                   message/message->map)]
+          (if-let [message (some->> (.nextMessage subscription wait)
+                                    (message/message->map opt))]
             message
             (recur (+ elapsed wait))))))))
 
-(defn ^:export unsubscribe [^IterableConsumer subscription]
-  (.close subscription)
+(defn ^:export unsubscribe [subscription]
+  (let [{:keys [^IterableConsumer subscription]} @subscription]
+    (.close subscription))
   nil)
 
 (defn ^:export ack

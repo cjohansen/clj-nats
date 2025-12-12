@@ -383,22 +383,22 @@
 (defn ^:export get-first-message [conn stream-name subject]
   (-> (jet-stream-management conn)
       (.getFirstMessage stream-name subject)
-      message/message-info->map))
+      (message/message-info->map @conn)))
 
 (defn ^:export get-last-message [conn stream-name subject]
   (-> (jet-stream-management conn)
       (.getLastMessage stream-name subject)
-      message/message-info->map))
+      (message/message-info->map @conn)))
 
 (defn ^:export get-message [conn stream-name seq]
   (-> (jet-stream-management conn)
       (.getMessage stream-name seq)
-      message/message-info->map))
+      (message/message-info->map @conn)))
 
 (defn ^:export get-next-message [conn stream-name seq subject]
   (-> (jet-stream-management conn)
       (.getNextMessage stream-name seq subject)
-      message/message-info->map))
+      (message/message-info->map @conn)))
 
 (defn ^{:style/indent 1 :export true} create-stream
   "Adds a stream. `config` is a map of the following keys:

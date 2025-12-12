@@ -84,23 +84,23 @@
       placement (assoc ::placement placement)
       republish (assoc ::republish republish))))
 
-(defn message-info->key-value-entry [bucket k ^MessageInfo msg]
+(defn message-info->key-value-entry [opt bucket k ^MessageInfo msg]
   (let [headers (.getHeaders msg)]
     {:nats.kv.entry/bucket bucket
      :nats.kv.entry/key k
      :nats.kv.entry/created-at (.toInstant (.getTime msg))
      :nats.kv.entry/operation (operation->k (NatsKeyValueUtil/getOperation headers))
      :nats.kv.entry/revision (.getSeq msg)
-     :nats.kv.entry/value (message/get-message-data (message/headers->map headers) (.getData msg))}))
+     :nats.kv.entry/value (message/get-message-data opt (message/headers->map headers) (.getData msg))}))
 
-(defn message->key-value-entry [bucket k ^Message msg]
+(defn message->key-value-entry [opt bucket k ^Message msg]
   (let [headers (.getHeaders msg)]
     {:nats.kv.entry/bucket bucket
      :nats.kv.entry/key k
      :nats.kv.entry/created-at (.toInstant (.timestamp (.metaData msg)))
      :nats.kv.entry/operation (operation->k (NatsKeyValueUtil/getOperation headers))
      :nats.kv.entry/revision (.streamSequence (.metaData msg))
-     :nats.kv.entry/value (message/get-message-data (message/headers->map headers) (.getData msg))}))
+     :nats.kv.entry/value (message/get-message-data opt (message/headers->map headers) (.getData msg))}))
 
 (defn native->key-value-entry [^KeyValueEntry entry]
   {:nats.kv.entry/bucket (.getBucket entry)
@@ -361,7 +361,7 @@
    (when-let [message-info (if rev
                              (.getMessage (kv-management conn bucket-name) k rev)
                              (.getMessage (kv-management conn bucket-name) k))]
-     (let [entry (message-info->key-value-entry bucket-name k message-info)]
+     (let [entry (message-info->key-value-entry @conn bucket-name k message-info)]
        (when (= :nats.kv-operation/put (:nats.kv.entry/operation entry))
          entry)))))
 
@@ -433,7 +433,7 @@
    (get-history conn (namespace k) (name k)))
   ([conn bucket-name k]
    (->> (.getHistory (kv-management conn bucket-name) k)
-        (map #(message->key-value-entry bucket-name k %)))))
+        (map #(message->key-value-entry @conn bucket-name k %)))))
 
 (defn ^:export get-keys
   "Return a set of all the keys in the bucket as strings"

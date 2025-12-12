@@ -1,5 +1,6 @@
 (ns nats.message
-  (:require [clojure.set :as set])
+  (:require [clojure.edn :as edn]
+            [clojure.set :as set])
   (:import (io.nats.client Message)
            (io.nats.client.api MessageInfo PublishAck)
            (io.nats.client.impl AckType Headers NatsJetStreamMetaData NatsMessage
@@ -63,22 +64,22 @@
       data (.data data)
       :always (.build))))
 
-(defn ^:no-doc bytes->edn [data]
+(defn ^:no-doc bytes->edn [data {:keys [edn-reader-opts]}]
   (let [s (String. data)]
     (try
-      (read-string s)
+      (edn/read-string (or edn-reader-opts {}) s)
       (catch Exception e
         (throw (ex-info "Unable to parse body of EDN message" {:data s} e))))))
 
-(defn ^:no-doc get-message-data [headers data]
+(defn ^:no-doc get-message-data [opt headers data]
   (let [content-type (first (get headers "content-type"))]
     (cond-> data
       (= "text/plain" content-type) (String.)
-      (= "application/edn" content-type) bytes->edn)))
+      (= "application/edn" content-type) (bytes->edn opt))))
 
-(defn ^:no-doc message-info->map [^MessageInfo message]
+(defn ^:no-doc message-info->map [^MessageInfo message & [opt]]
   (let [headers (headers->map (.getHeaders message))]
-    {::data (get-message-data headers (.getData message))
+    {::data (get-message-data opt headers (.getData message))
      ::headers headers
      ::last-seq (.getLastSeq message)
      ::seq (.getSeq message)
@@ -106,13 +107,13 @@
              :nats.stream.meta/timestamp (.toInstant (.timestamp metadata))}
       domain (assoc :domain domain))))
 
-(defn message->map [^Message message]
+(defn ^{:indent 1} message->map [opt ^Message message]
   (let [headers (headers->map (.getHeaders message))
         status (status->map (.getStatus message))
         last-ack (.lastAck message)
         jet-stream? (.isJetStream message)]
     (cond-> {::consume-byte-count (.consumeByteCount message)
-             ::data (get-message-data headers (.getData message))
+             ::data (get-message-data opt headers (.getData message))
              ::headers headers
              ::reply-to (.getReplyTo message)
              ::SID (.getSID message)
