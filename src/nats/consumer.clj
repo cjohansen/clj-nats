@@ -291,16 +291,18 @@
   ;; to wait for the full timeout and return `nil`, even when there are more
   ;; messages on the stream.
   (let [{:keys [^IterableConsumer subscription] :as opt} @subscription
-        timeout (if (instance? java.time.Duration timeout)
-                  (.toMillis ^java.time.Duration timeout)
-                  timeout)]
-    (loop [elapsed 0]
-      (when (< elapsed timeout)
-        (let [wait (min 100 (- timeout elapsed))]
-          (if-let [message (some->> (.nextMessage subscription wait)
-                                    (message/message->map opt))]
-            message
-            (recur (+ elapsed wait))))))))
+        timeout (if (instance? Duration timeout)
+                  (.toMillis ^Duration timeout)
+                  timeout)
+        start (Instant/now)]
+    (loop [now start]
+      (let [elapsed (- (.toEpochMilli now) (.toEpochMilli start))]
+        (when (< elapsed timeout)
+          (let [wait (min 100 (- timeout elapsed))]
+            (if-let [message (some->> (.nextMessage subscription wait)
+                                      (message/message->map opt))]
+              message
+              (recur (Instant/now)))))))))
 
 (defn ^:export unsubscribe [subscription]
   (let [{:keys [^IterableConsumer subscription]} @subscription]
