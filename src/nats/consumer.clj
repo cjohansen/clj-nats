@@ -292,17 +292,17 @@
   ;; messages on the stream.
   (let [{:keys [^IterableConsumer subscription] :as opt} @subscription
         timeout (if (instance? Duration timeout)
-                  (.toMillis ^Duration timeout)
-                  timeout)
-        start (Instant/now)]
+                  (.toNanos ^Duration timeout)
+                  (* 1000000 timeout))
+        start (System/nanoTime)]
     (loop [now start]
-      (let [elapsed (- (.toEpochMilli now) (.toEpochMilli start))]
+      (let [elapsed (- now start)]
         (when (< elapsed timeout)
           (let [wait (min 100 (- timeout elapsed))]
             (if-let [message (some->> (.nextMessage subscription wait)
                                       (message/message->map opt))]
               message
-              (recur (Instant/now)))))))))
+              (recur (System/nanoTime)))))))))
 
 (defn ^:export unsubscribe [subscription]
   (let [{:keys [^IterableConsumer subscription]} @subscription]
