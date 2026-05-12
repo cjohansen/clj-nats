@@ -8,7 +8,7 @@
                            Message PublishOptions PublishOptions$Builder
                            PurgeOptions PurgeOptions$Builder)
            (io.nats.client.api AccountLimits AccountStatistics AccountTier ApiStats
-                               CompressionOption ConsumerLimits DiscardPolicy External
+                               CompressionOption ConsumerLimits DiscardPolicy External MirrorInfo
                                Placement Republish RetentionPolicy SourceBase SourceInfo
                                StorageType StreamConfiguration StreamInfo StreamInfoOptions
                                StreamInfoOptions$Builder StreamState Subject SubjectTransform)))
@@ -146,6 +146,17 @@
       external (assoc :nats.source/external external)
       (seq subject-transforms) (assoc :nats.source/subject-transforms subject-transforms))))
 
+(defn ^:no-doc mirror-info->map [^MirrorInfo info]
+  (let [error (.getError info)
+        external (some-> ^External (.getExternal info) external->map)
+        subject-transforms (map subject-transform->map (.getSubjectTransforms info))]
+    (cond-> {:nats.source/active (.getActive info)
+             :nats.source/lag (.getLag info)
+             :nats.source/name (.getName info)}
+      error (assoc :nats.source/error error)
+      external (assoc :nats.source/external external)
+      (seq subject-transforms) (assoc :nats.source/subject-transforms subject-transforms))))
+
 (defn ^:no-doc stream-state->map [^StreamState state]
   {::byte-count (.getByteCount state)
    ::consumer-count (.getConsumerCount state)
@@ -171,7 +182,7 @@
              ::timestamp (some-> (.getTimestamp info) .toInstant)}
       (seq source-infos) (assoc ::source-infos source-infos)
       cluster-info (assoc ::cluster-info (cluster/cluster-info->map cluster-info))
-      mirror-info (assoc ::mirror-info (source-info->map mirror-info))
+      mirror-info (assoc ::mirror-info (mirror-info->map mirror-info))
       stream-state (assoc ::stream-state (stream-state->map stream-state)))))
 
 (defn ^:no-doc api-stats->map [^ApiStats api]
@@ -342,7 +353,7 @@
   [conn stream-name & [opts]]
   (some-> (get-stream-info-object conn stream-name opts)
           .getMirrorInfo
-          source-info->map))
+          mirror-info->map))
 
 (defn ^:export get-stream-state
   "Get the state for `stream-name`. `opts` is a map of:
