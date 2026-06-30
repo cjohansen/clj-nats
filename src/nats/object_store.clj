@@ -111,6 +111,6 @@
   (ObjectStoreManagement/.delete (bucket-management conn) bucket-name))
 
 (defn ^:export get-bucket-statuses [conn]
-  (->> (ObjectStoreManagement/.getStatuses (bucket-management conn))
-       (map object-store-status->map)
-       set))
+  (into #{}
+        (map object-store-status->map)
+        (ObjectStoreManagement/.getStatuses (bucket-management conn))))
