@@ -54,7 +54,8 @@
     placement (.placement placement)
     replicas (.replicas replicas)
     storage-type (.storageType storage-type)
-    ttl (.ttl ttl)))
+    ttl (.ttl ttl)
+    :then (.build)))
 
 ;; Helper functions
 
