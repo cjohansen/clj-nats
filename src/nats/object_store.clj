@@ -1,8 +1,10 @@
 (ns nats.object-store
-  (:import (io.nats.client ObjectStoreOptions ObjectStoreOptions$Builder)
+  (:import (io.nats.client Connection ObjectStoreManagement ObjectStoreOptions ObjectStoreOptions$Builder)
            (io.nats.client.api ObjectStoreConfiguration ObjectStoreConfiguration$Builder
                                ObjectStoreStatus))
   (:require [nats.stream :as stream]))
+
+(set! *warn-on-reflection* true)
 
 ;; Map data classes to maps
 
@@ -60,7 +62,7 @@
   (let [{:keys [osbm conn object-store-options]} @nats-conn]
     (when-not osbm
       (->> (build-object-store-options object-store-options)
-           (.objectStoreManagement conn)
+           (Connection/.objectStoreManagement conn)
            (swap! nats-conn assoc :osbm))))
   (:osbm @nats-conn))
 
@@ -68,7 +70,7 @@
   (let [{:keys [osm conn object-store-options]} @nats-conn]
     (when-not (get-in osm [bucket-name])
       (->> (build-object-store-options object-store-options)
-           (.objectStore conn bucket-name)
+           (Connection/.objectStore conn bucket-name)
            (swap! nats-conn assoc-in [:osm bucket-name]))))
   (get-in @nats-conn [:osm bucket-name]))
 
@@ -94,21 +96,21 @@
 (defn ^{:style/indent 1 :export true} create-bucket
   [conn config]
   (-> (bucket-management conn)
-      (.create (build-object-store-configuration config))
+      (ObjectStoreManagement/.create (build-object-store-configuration config))
       object-store-status->map))
 
 (defn ^:export get-bucket-status
   [conn bucket-name]
   (-> (bucket-management conn)
-      (.getStatus bucket-name)
+      (ObjectStoreManagement/.getStatus bucket-name)
       object-store-status->map))
 
 (defn ^:export delete-bucket
   "Delete a key/value bucket"
   [conn bucket-name]
-  (.delete (bucket-management conn) bucket-name))
+  (ObjectStoreManagement/.delete (bucket-management conn) bucket-name))
 
 (defn ^:export get-bucket-statuses [conn]
-  (->> (.getStatuses (bucket-management conn))
+  (->> (ObjectStoreManagement/.getStatuses (bucket-management conn))
        (map object-store-status->map)
        set))
