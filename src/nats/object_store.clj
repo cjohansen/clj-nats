@@ -115,3 +115,19 @@
   (into #{}
         (map object-store-status->map)
         (ObjectStoreManagement/.getStatuses (bucket-management conn))))
+
+(defn put-bytes [conn bucket ^String object-name ^bytes bytes]
+  (let [object-store (Connection/.objectStore (:conn @conn) bucket)]
+    (ObjectStore/.put object-store object-name bytes)))
+
+(defn put-str [conn bucket ^String object-name ^String s]
+  (put-bytes conn bucket object-name (String/.getBytes s "UTF-8")))
+
+(defn get-bytes ^bytes [conn bucket ^String object-name]
+  (let [object-store (Connection/.objectStore (:conn @conn) bucket)
+        buffer (ByteArrayOutputStream/new)]
+    (ObjectStore/.get object-store object-name buffer)
+    (ByteArrayOutputStream/.toByteArray buffer)))
+
+(defn get-str [conn bucket ^String object-name]
+  (String. (get-bytes conn bucket object-name) "UTF-8"))
