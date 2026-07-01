@@ -1,11 +1,14 @@
 (ns nats.object-store
+  "Object Store lets you store, list and watch binary large objects (BLOBs)"
+  (:refer-clojure :exclude [list])
   (:import (io.nats.client Connection ObjectStore ObjectStoreManagement ObjectStoreOptions ObjectStoreOptions$Builder)
-           (io.nats.client.api ObjectStoreConfiguration ObjectStoreConfiguration$Builder
+           (io.nats.client.api ObjectInfo ObjectStoreConfiguration ObjectStoreConfiguration$Builder
                                ObjectStoreStatus Placement StorageType)
            (java.io ByteArrayOutputStream)
-           (java.time Duration)
+           (java.time Duration ZonedDateTime)
            (java.util Map))
-  (:require [clojure.core.async :refer [buffer]]
+  (:require [clojure.spec.alpha :as s]
+            [nats.message :as message]
             [nats.stream :as stream]))
 
 ;; Map data classes to maps
@@ -129,3 +132,40 @@
 
 (defn get-str [conn bucket ^String object-name]
   (String. (get-bytes conn bucket object-name) "UTF-8"))
+
+(s/def :nats.object/description string?)
+(s/def :nats.object/deleted? boolean?)
+(s/def :nats.object/name string?)
+(s/def :nats.object/digest string?)
+(s/def :nats.object/modified-zdt #(instance? ZonedDateTime %))
+(s/def :nats.object/size-bytes number?)
+(s/def :nats.object/headers (s/map-of string? string?))
+(s/def :nats.object/nuid string?)
+
+(def object-info-accessors
+  {:nats.object/chunks {:accessor ObjectInfo/.getChunks}
+   :nats.object/deleted? {:accessor ObjectInfo/.isDeleted}
+   :nats.object/description {:accessor ObjectInfo/.getDescription}
+   :nats.object/digest {:accessor ObjectInfo/.getDigest}
+   :nats.object/headers {:accessor ObjectInfo/.getHeaders
+                         :parser #'nats.message/headers->map}
+   :nats.object/modified-zdt {:accessor ObjectInfo/.getModified}
+   :nats.object/name {:accessor ObjectInfo/.getObjectName}
+   :nats.object/nuid {:accessor ObjectInfo/.getNuid}
+   :nats.object/size-bytes {:accessor ObjectInfo/.getSize}
+   ;; TODO model io.nats.client.api.ObjectLink
+   })
+
+(defn ObjectInfo->map [^ObjectInfo object-info]
+  (reduce (fn [m [k {:keys [accessor parser]}]]
+            (let [value (accessor object-info)]
+              (if (some? value)
+                (assoc m k (cond-> value
+                             parser parser))
+                m)))
+          {}
+          object-info-accessors))
+
+(defn list [conn bucket]
+  (let [object-store (Connection/.objectStore (:conn @conn) bucket)]
+    (map ObjectInfo->map (ObjectStore/.getList object-store))))
