@@ -26,3 +26,19 @@
                        (map :nats.object/name)
                        (object-store/list connection store-name))
                  "ObjectInfo->map.txt")))
+
+(comment
+  ;; Typical workflow: demonstrate an Object Store capability with the Java API,
+  ;; then look for an alternative in idiomatic Clojure.
+
+  (import '[io.nats.client Nats Connection ObjectStoreManagement ObjectStore]
+          '[io.nats.client.api ObjectStoreConfiguration ObjectStoreStatus ObjectMeta ObjectInfo]
+          '[io.nats.client.impl
+            AckType Headers NatsJetStreamMetaData NatsMessage NatsMessage$Builder]
+          '[java.io ByteArrayInputStream ByteArrayOutputStream]
+          '[java.lang String]
+          '[java.util Arrays])
+
+  (def store (Connection/.objectStore (:conn @connection) store-name))
+
+  )
