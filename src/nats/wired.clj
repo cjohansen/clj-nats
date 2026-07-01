@@ -16,8 +16,6 @@
   (:import (java.io DataOutputStream InputStreamReader BufferedReader)
            (java.net Socket)))
 
-(set! *warn-on-reflection* true)
-
 (deftype Connection [^Socket socket ^BufferedReader reader
                      ^DataOutputStream data-output-stream])
 
