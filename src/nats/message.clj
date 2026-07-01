@@ -64,7 +64,7 @@
       data (.data data)
       :always (.build))))
 
-(defn ^:no-doc bytes->edn [data {:keys [edn-reader-opts]}]
+(defn ^:no-doc bytes->edn [^bytes data {:keys [edn-reader-opts]}]
   (let [s (String. data)]
     (try
       (edn/read-string (or edn-reader-opts {}) s)
