@@ -8,8 +8,6 @@
   (:require [clojure.core.async :refer [buffer]]
             [nats.stream :as stream]))
 
-#_(set! *warn-on-reflection* true)
-
 ;; Map data classes to maps
 
 (defn ^:no-doc object-store-status->map [^ObjectStoreStatus status]
