@@ -1,7 +1,8 @@
 (ns nats.object-store-test
   (:require [clojure.test :refer [deftest is]]
             [nats.core :as nats]
-            [nats.object-store :as object-store]))
+            [nats.object-store :as object-store])
+  (:import (java.util Arrays)))
 
 (defonce connection (nats/connect "nats://localhost:4222"))
 (def bucket-name "clj-nats-object-store-testdata")
@@ -9,12 +10,10 @@
 #_(object-store/delete-bucket connection bucket-name) ;; (should you want to start fresh)
 
 (deftest put-get-bytes
-  (let [message (str "Hello, " (rand-int 1000) "th world!")
-        message-bytes (String/.getBytes message "UTF-8")]
+  (let [message-bytes (String/.getBytes (str "Hello, " (rand-int 1000) "th world!") "UTF-8")]
     (object-store/put-bytes connection bucket-name "bytes-message.txt" message-bytes)
-    (is (= message
-           (String. (object-store/get-bytes connection bucket-name "bytes-message.txt")
-                    "UTF-8")))))
+    (is (Arrays/equals message-bytes
+                       (object-store/get-bytes connection bucket-name "bytes-message.txt")))))
 
 (deftest put-get-str
   (let [message (str "Hello, " (rand-int 1000) "th world!")]
