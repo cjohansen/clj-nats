@@ -278,6 +278,7 @@
     :then (.build)))
 
 (defn ^:no-doc build-jet-stream-options
+  ^JetStreamOptions
   [{::keys [domain
             opt-out-290-consumer-create?
             prefix

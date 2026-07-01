@@ -1,10 +1,14 @@
 (ns nats.object-store
-  (:import (io.nats.client Connection ObjectStoreManagement ObjectStoreOptions ObjectStoreOptions$Builder)
+  (:import (io.nats.client Connection ObjectStore ObjectStoreManagement ObjectStoreOptions ObjectStoreOptions$Builder)
            (io.nats.client.api ObjectStoreConfiguration ObjectStoreConfiguration$Builder
-                               ObjectStoreStatus))
-  (:require [nats.stream :as stream]))
+                               ObjectStoreStatus Placement StorageType)
+           (java.io ByteArrayOutputStream)
+           (java.time Duration)
+           (java.util Map))
+  (:require [clojure.core.async :refer [buffer]]
+            [nats.stream :as stream]))
 
-(set! *warn-on-reflection* true)
+#_(set! *warn-on-reflection* true)
 
 ;; Map data classes to maps
 
@@ -27,35 +31,31 @@
 
 ;; Build options
 
-(defn ^:no-doc build-object-store-options [{::keys [stream-options domain prefix request-timeout]}]
-  (cond-> ^ObjectStoreOptions$Builder (ObjectStoreOptions/builder)
-    stream-options (.jetStreamOptions (stream/build-jet-stream-options stream-options))
-    domain (.jsDomain domain)
-    prefix (.jsPrefix prefix)
-    request-timeout (.jsRequestTimeout request-timeout)
-    :then (.build)))
+(defn ^:no-doc build-object-store-options [{::keys [stream-options]}]
+  (-> (ObjectStoreOptions/builder (stream/build-jet-stream-options stream-options))
+      (ObjectStoreOptions$Builder/.build)))
 
 (defn ^:no-doc build-object-store-configuration
-  [{::keys [bucket-name
-            compression?
-            description
-            max-bucket-size
-            metadata
-            placement
-            replicas
-            storage-type
-            ttl]}]
+  [{::keys [^String bucket-name
+            ^boolean compression?
+            ^String description
+            ^long max-bucket-size
+            ^Map metadata
+            ^Placement placement
+            ^int replicas
+            ^StorageType storage-type
+            ^Duration ttl]}]
   (cond-> ^ObjectStoreConfiguration$Builder (ObjectStoreConfiguration/builder)
     bucket-name (.name bucket-name)
     compression? (.compression compression?)
     description (.description description)
     max-bucket-size (.maxBucketSize max-bucket-size)
-    metadata (.metadata (update-keys metadata clojure.core/name))
+    metadata (.metadata ^Map (update-keys metadata clojure.core/name))
     placement (.placement placement)
     replicas (.replicas replicas)
     storage-type (.storageType storage-type)
     ttl (.ttl ttl)
-    :then (.build)))
+    :then .build))
 
 ;; Helper functions
 
