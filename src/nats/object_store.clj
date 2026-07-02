@@ -184,3 +184,12 @@
               (ObjectStore/.getInfo object-store object-name true)
               (ObjectStore/.getInfo object-store object-name))
             ObjectInfo->map)))
+
+(defn delete
+  "Delete object given its name
+
+  Idempotent except for :nats.object/modified-zdt, which may or may not change
+  on extra deletes."
+  [conn bucket ^String object-name]
+  (let [object-store (Connection/.objectStore (:conn @conn) bucket)]
+    (some-> (ObjectStore/.delete object-store object-name) ObjectInfo->map)))

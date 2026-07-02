@@ -53,6 +53,25 @@
              (-> (object-store/get-info connection store-name "info2.txt")
                  (dissoc ::object/modified-zdt)))))))
 
+(deftest delete
+  (testing "deletion"
+    (object-store/put-str connection store-name "deleted.txt" "to be deleted!")
+    (object-store/delete connection store-name "deleted.txt")
+    (is (true? (::object/deleted?
+                (object-store/get-info connection
+                                       store-name
+                                       "deleted.txt"
+                                       {::object/include-deleted? true})
+                "not found"))))
+
+  (testing "deletion is idempotent if we ignore the modified-zdt field (which is weird)"
+    (object-store/put-str connection store-name "deleted2.txt" "double time!")
+    (is (= (-> (object-store/delete connection store-name "deleted2.txt")
+               (dissoc ::object/modified-zdt))
+           (-> (object-store/delete connection store-name "deleted2.txt")
+               (dissoc ::object/modified-zdt))))))
+
+
 (comment
   ;; Typical workflow: demonstrate an Object Store capability with the Java API,
   ;; then look for an alternative in idiomatic Clojure.
