@@ -1,6 +1,7 @@
 (ns nats.object-store-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require [clojure.test :refer [deftest is testing]]
             [nats.core :as nats]
+            [nats.object :as-alias object]
             [nats.object-store :as object-store])
   (:import (java.util Arrays)))
 
@@ -26,6 +27,31 @@
                        (map :nats.object/name)
                        (object-store/list connection store-name))
                  "ObjectInfo->map.txt")))
+
+(deftest get-info
+  (object-store/put-str connection store-name "info.txt" "information about this and that")
+  (is (= (-> (object-store/get-info connection store-name "info.txt")
+             (select-keys [::object/digest
+                           ::object/chunks
+                           ::object/name
+                           ::object/size-bytes]))
+         {:nats.object/digest "SHA-256=QcnWjqprxqQ-XfobO-nWBZBd9AEeZ-R4wVxgKFnE2BI=",
+          :nats.object/chunks 1,
+          :nats.object/name "info.txt",
+          :nats.object/size-bytes 31}))
+
+  (testing "put-str returns mostly the same as get-info"
+    (let [message (str "Message " (rand-int 1000))]
+      ;; Why dissoc ::object/modified-zdt, you say?
+      ;;
+      ;; Very funny you should ask. You see, information from the put-str and
+      ;; the get-info call is identical (including SHA256 digest), but the
+      ;; modified timestamp is different. In my testing, the put-str call
+      ;; returns a timestamp *after* the get-info call.
+      (is (= (-> (object-store/put-str connection store-name "info2.txt" message)
+                 (dissoc ::object/modified-zdt))
+             (-> (object-store/get-info connection store-name "info2.txt")
+                 (dissoc ::object/modified-zdt)))))))
 
 (comment
   ;; Typical workflow: demonstrate an Object Store capability with the Java API,

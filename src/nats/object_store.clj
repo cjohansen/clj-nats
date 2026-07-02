@@ -9,6 +9,7 @@
            (java.util Map))
   (:require [clojure.spec.alpha :as s]
             [nats.message :as message]
+            [nats.object :as-alias object]
             [nats.stream :as stream]))
 
 ;; Map data classes to maps
@@ -117,22 +118,6 @@
         (map object-store-status->map)
         (ObjectStoreManagement/.getStatuses (bucket-management conn))))
 
-(defn put-bytes [conn bucket ^String object-name ^bytes bytes]
-  (let [object-store (Connection/.objectStore (:conn @conn) bucket)]
-    (ObjectStore/.put object-store object-name bytes)))
-
-(defn put-str [conn bucket ^String object-name ^String s]
-  (put-bytes conn bucket object-name (String/.getBytes s "UTF-8")))
-
-(defn get-bytes ^bytes [conn bucket ^String object-name]
-  (let [object-store (Connection/.objectStore (:conn @conn) bucket)
-        buffer (ByteArrayOutputStream/new)]
-    (ObjectStore/.get object-store object-name buffer)
-    (ByteArrayOutputStream/.toByteArray buffer)))
-
-(defn get-str [conn bucket ^String object-name]
-  (String. (get-bytes conn bucket object-name) "UTF-8"))
-
 (s/def :nats.object/description string?)
 (s/def :nats.object/deleted? boolean?)
 (s/def :nats.object/name string?)
@@ -166,6 +151,36 @@
           {}
           object-info-accessors))
 
+(defn put-bytes [conn bucket ^String object-name ^bytes bytes]
+  (let [object-store (Connection/.objectStore (:conn @conn) bucket)]
+    (-> (ObjectStore/.put object-store object-name bytes)
+        ObjectInfo->map)))
+
+(defn put-str [conn bucket ^String object-name ^String s]
+  (put-bytes conn bucket object-name (String/.getBytes s "UTF-8")))
+
+(defn get-bytes ^bytes [conn bucket ^String object-name]
+  (let [object-store (Connection/.objectStore (:conn @conn) bucket)
+        buffer (ByteArrayOutputStream/new)]
+    (ObjectStore/.get object-store object-name buffer)
+    (ByteArrayOutputStream/.toByteArray buffer)))
+
+(defn get-str [conn bucket ^String object-name]
+  (String. (get-bytes conn bucket object-name) "UTF-8"))
+
 (defn list [conn bucket]
   (let [object-store (Connection/.objectStore (:conn @conn) bucket)]
     (map ObjectInfo->map (ObjectStore/.getList object-store))))
+
+(defn get-info
+  "Get information about an object, without transferring the object itself
+
+  - For objects that never have existed, returns nil.
+  - For objects that have existed and have been deleted, return object info
+    if :nats.object/include-deleted? is set, otherwise nil."
+  [conn bucket ^String object-name & {::object/keys [include-deleted?]}]
+  (let [object-store (Connection/.objectStore (:conn @conn) bucket)]
+    (some-> (if include-deleted?
+              (ObjectStore/.getInfo object-store object-name true)
+              (ObjectStore/.getInfo object-store object-name))
+            ObjectInfo->map)))
