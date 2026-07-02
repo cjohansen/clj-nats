@@ -168,7 +168,9 @@
 (defn get-str [conn bucket ^String object-name]
   (String. (get-bytes conn bucket object-name) "UTF-8"))
 
-(defn list [conn bucket]
+(defn list
+  "List information for all objects in bucket, without transferring any objects"
+  [conn bucket]
   (let [object-store (Connection/.objectStore (:conn @conn) bucket)]
     (map ObjectInfo->map (ObjectStore/.getList object-store))))
 
