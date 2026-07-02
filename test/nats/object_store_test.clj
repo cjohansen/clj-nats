@@ -71,6 +71,30 @@
            (-> (object-store/delete connection store-name "deleted2.txt")
                (dissoc ::object/modified-zdt))))))
 
+(defn prepare-for-sealing [bucket-name]
+  (when-not (some (comp #{bucket-name} :nats.object-store/bucket-name)
+                  (object-store/get-bucket-statuses connection))
+    (object-store/create-bucket connection {:nats.object-store/bucket-name bucket-name})
+    (object-store/put-str connection bucket-name "before-seal.txt" "Written before the sealing"))
+  (object-store/get-bucket-status connection bucket-name))
+
+(def sealed-store-name "clj-nats-object-store-sealed")
+
+(deftest seal
+  (prepare-for-sealing sealed-store-name)
+  (object-store/seal! connection sealed-store-name)
+  (is (:nats.object-store/sealed? (object-store/get-bucket-status connection sealed-store-name)))
+
+  (testing "files written before sealing are available"
+    (is (object-store/get-info connection sealed-store-name "before-seal.txt")))
+
+  (testing "attempting mutation after sealing gives an exception"
+    (is (= :exception
+           (try (object-store/put-str
+                 connection sealed-store-name
+                 "after-seal.txt" "Written after the sealing")
+                :success
+                (catch Exception _ :exception))))))
 
 (comment
   ;; Typical workflow: demonstrate an Object Store capability with the Java API,

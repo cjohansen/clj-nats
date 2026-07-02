@@ -195,3 +195,12 @@
   [conn bucket ^String object-name]
   (let [object-store (Connection/.objectStore (:conn @conn) bucket)]
     (some-> (ObjectStore/.delete object-store object-name) ObjectInfo->map)))
+
+(defn seal!
+  "Prohibit future mutation of this object store
+
+  Idempotent, calls return status for this bucket, except :nats.stream/timestamp
+  for the backing stream"
+  [conn bucket]
+  (-> (ObjectStore/.seal (Connection/.objectStore (:conn @conn) bucket))
+      object-store-status->map))
