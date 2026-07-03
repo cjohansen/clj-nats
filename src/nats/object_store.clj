@@ -215,8 +215,8 @@
 
   - `on-change` is called for each change to the bucket with a map of
     information about the changed object.
-  - `on-end-of-data` is called when all historical events untill the present
-    have been consumed.
+  - `on-end-of-data` (optional) is called when all historical events untill the
+    present have been consumed.
   - `get-consumer-name-prefix` (optional) sets the prefix for the NATS consumer
     backing the watcher.
 
