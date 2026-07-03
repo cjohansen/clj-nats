@@ -71,9 +71,12 @@
            (-> (object-store/delete connection store-name "deleted2.txt")
                (dissoc ::object/modified-zdt))))))
 
+(defn has-bucket? [connection bucket-name]
+  (boolean (some (comp #{bucket-name} :nats.object-store/bucket-name)
+                 (object-store/get-bucket-statuses connection))))
+
 (defn prepare-for-sealing [bucket-name]
-  (when-not (some (comp #{bucket-name} :nats.object-store/bucket-name)
-                  (object-store/get-bucket-statuses connection))
+  (when-not (has-bucket? connection bucket-name)
     (object-store/create-bucket connection {:nats.object-store/bucket-name bucket-name})
     (object-store/put-str connection bucket-name "before-seal.txt" "Written before the sealing"))
   (object-store/get-bucket-status connection bucket-name))
@@ -95,6 +98,71 @@
                  "after-seal.txt" "Written after the sealing")
                 :success
                 (catch Exception _ :exception))))))
+
+(def watch-store-name "clj-nats-object-store-testdata-watch")
+
+(defn prepare-fresh-bucket [bucket-name]
+  (when (has-bucket? connection bucket-name)
+    (object-store/delete-bucket connection bucket-name))
+  (object-store/create-bucket connection {:nats.object-store/bucket-name bucket-name}))
+
+(deftest watch
+  (testing "events prior to watch start"
+    (let [infos (atom [])
+          on-change #(swap! infos conj %)
+          ready? (promise)
+          on-end-of-data #(deliver ready? ::end-of-data)]
+      ;; We prefer to write object store tests that don't care about other stuff
+      ;; in the buckets, but this assumption doesn't hold for object store
+      ;; watches, as object store watches can list events that happened back in
+      ;; time, before the watch was created.
+      (prepare-fresh-bucket watch-store-name)
+      (object-store/put-str connection watch-store-name "hi1.txt" "hi there")
+      (object-store/put-str connection watch-store-name "hi2.txt" "aloha")
+      (with-open [_ (object-store/watch connection watch-store-name on-change {:on-end-of-data on-end-of-data})]
+        (deref ready?)
+        (is (= '({::object/digest "SHA-256=m5ah_h1UjLvJYMxqAoZmj9dKdjZnsGNm-yMkJp_KuqQ=",
+                  ::object/name "hi1.txt"}
+                 {::object/digest "SHA-256=AgapeEOxuk-7FH1HJVDsO17oqsrfNwdSIVckCUDRvr0=",
+                  ::object/name "hi2.txt"})
+               (map #(select-keys % [::object/digest ::object/name])
+                    (deref infos)))))))
+
+  (testing "events after watch start"
+    (let [infos (atom [])
+          on-change #(swap! infos conj %)
+          _ (prepare-fresh-bucket watch-store-name)]
+      (with-open [_ (object-store/watch connection watch-store-name on-change)]
+        (object-store/put-str connection watch-store-name "hi1.txt" "hi there")
+        (object-store/put-str connection watch-store-name "hi2.txt" "aloha")
+
+        ;; "Why is object-store/list here?" Sorry :(. There's doesn't appear to
+        ;; be any jnats operation to wait untill all watchers are up to speed.
+        ;; Making a call to list objects appears to be sufficient.
+        (object-store/list connection watch-store-name))
+      (is (= '({::object/digest "SHA-256=m5ah_h1UjLvJYMxqAoZmj9dKdjZnsGNm-yMkJp_KuqQ=",
+                ::object/name "hi1.txt"}
+               {::object/digest "SHA-256=AgapeEOxuk-7FH1HJVDsO17oqsrfNwdSIVckCUDRvr0=",
+                ::object/name "hi2.txt"})
+             (map #(select-keys % [::object/digest ::object/name])
+                  (deref infos))))))
+
+  (testing "ignores events after watch stop"
+    (let [infos (atom [])
+          on-change #(swap! infos conj %)
+          _ (prepare-fresh-bucket watch-store-name)]
+      (with-open [_ (object-store/watch connection watch-store-name on-change)]
+        (object-store/put-str connection watch-store-name "hi1.txt" "hi there")
+        (object-store/put-str connection watch-store-name "hi2.txt" "aloha")
+        (object-store/list connection watch-store-name))
+      (object-store/put-str connection watch-store-name "ignored1.txt" "please ignore")
+      (object-store/put-str connection watch-store-name "ignored2.txt" "yeah, ignore.")
+      (is (= '({::object/digest "SHA-256=m5ah_h1UjLvJYMxqAoZmj9dKdjZnsGNm-yMkJp_KuqQ=",
+                ::object/name "hi1.txt"}
+               {::object/digest "SHA-256=AgapeEOxuk-7FH1HJVDsO17oqsrfNwdSIVckCUDRvr0=",
+                ::object/name "hi2.txt"})
+             (map #(select-keys % [::object/digest ::object/name])
+                  (deref infos)))))))
 
 (comment
   ;; Typical workflow: demonstrate an Object Store capability with the Java API,

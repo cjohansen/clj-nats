@@ -3,7 +3,9 @@
   (:refer-clojure :exclude [list])
   (:import (io.nats.client Connection ObjectStore ObjectStoreManagement ObjectStoreOptions ObjectStoreOptions$Builder)
            (io.nats.client.api ObjectInfo ObjectStoreConfiguration ObjectStoreConfiguration$Builder
-                               ObjectStoreStatus Placement StorageType)
+                               ObjectStoreStatus ObjectStoreWatcher ObjectStoreWatchOption
+                               Placement StorageType)
+           (io.nats.client.impl NatsObjectStoreWatchSubscription)
            (java.io ByteArrayOutputStream)
            (java.time Duration ZonedDateTime)
            (java.util Map))
@@ -204,3 +206,48 @@
   [conn bucket]
   (-> (ObjectStore/.seal (Connection/.objectStore (:conn @conn) bucket))
       object-store-status->map))
+
+(defn watch
+  "Watch an object store for changes.
+
+  Optionally also iterate over the changes that happened before the watcher was
+  created. An object store watcher will create a NATS consumer.
+
+  - `on-change` is called for each change to the bucket with a map of
+    information about the changed object.
+  - `on-end-of-data` is called when all historical events untill the present
+    have been consumed.
+  - `get-consumer-name-prefix` (optional) sets the prefix for the NATS consumer
+    backing the watcher.
+
+  watch returns a subscription, which must be closed to avoid resource leaks.
+  Either use a with-open block,
+
+    (with-open [_ (object-store/watch conn store)]
+      ,,,)
+
+  , or call object-store/unwatch when you're done with it."
+  ^NatsObjectStoreWatchSubscription
+  [conn bucket on-change & {:keys [on-end-of-data get-consumer-name-prefix watch-options]}]
+  (let [watcher (if get-consumer-name-prefix
+                  (reify ObjectStoreWatcher
+                    (watch [_this object-info]
+                      (on-change (ObjectInfo->map object-info)))
+                    (endOfData [_this]
+                      (when on-end-of-data
+                        (on-end-of-data)))
+                    (getConsumerNamePrefix [_this]
+                      (get-consumer-name-prefix)))
+                  (reify ObjectStoreWatcher
+                    (watch [_ object-info]
+                      (on-change (ObjectInfo->map object-info)))
+                    (endOfData [_this]
+                      (when on-end-of-data
+                        (on-end-of-data)))))]
+    (ObjectStore/.watch (Connection/.objectStore (:conn @conn) bucket)
+                        watcher
+                        ;; TODO qualified kewords for watch options, pass a set
+                        (make-array ObjectStoreWatchOption 0))))
+
+(defn unwatch [subscription]
+  (NatsObjectStoreWatchSubscription/.close subscription))
