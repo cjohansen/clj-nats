@@ -198,12 +198,19 @@
   ;; Typical workflow: demonstrate an Object Store capability with the Java API,
   ;; then look for an alternative in idiomatic Clojure.
 
-  (import '[io.nats.client Nats Connection ObjectStoreManagement ObjectStore]
-          '[io.nats.client.api ObjectStoreConfiguration ObjectStoreStatus ObjectMeta ObjectInfo]
+  (import '[io.nats.client Nats Connection ObjectStoreManagement ObjectStore Subscription]
+          '[io.nats.client.api
+            ObjectStoreConfiguration ObjectStoreStatus
+            ObjectMeta ObjectMetaOptions
+            ObjectLink
+            ObjectInfo
+            ObjectStoreWatcher ObjectStoreWatchOption
+            Watcher]
           '[io.nats.client.impl
-            AckType Headers NatsJetStreamMetaData NatsMessage NatsMessage$Builder]
+            AckType Headers NatsJetStreamMetaData NatsMessage NatsMessage$Builder
+            NatsObjectStoreWatchSubscription]
           '[java.io ByteArrayInputStream ByteArrayOutputStream]
-          '[java.lang String]
+          '[java.lang String AutoCloseable]
           '[java.util Arrays])
 
   (def store (Connection/.objectStore (:conn @connection) store-name))
