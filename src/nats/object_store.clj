@@ -120,6 +120,7 @@
         (map object-store-status->map)
         (ObjectStoreManagement/.getStatuses (bucket-management conn))))
 
+(s/def :nats.object/bucket string?)
 (s/def :nats.object/description string?)
 (s/def :nats.object/deleted? boolean?)
 (s/def :nats.object/name string?)
@@ -130,7 +131,8 @@
 (s/def :nats.object/nuid string?)
 
 (def object-info-accessors
-  {:nats.object/chunks {:accessor ObjectInfo/.getChunks}
+  {:nats.object/bucket {:accessor ObjectInfo/.getBucket}
+   :nats.object/chunks {:accessor ObjectInfo/.getChunks}
    :nats.object/deleted? {:accessor ObjectInfo/.isDeleted}
    :nats.object/description {:accessor ObjectInfo/.getDescription}
    :nats.object/digest {:accessor ObjectInfo/.getDigest}

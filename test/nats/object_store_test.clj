@@ -31,13 +31,15 @@
 (deftest get-info
   (object-store/put-str connection store-name "info.txt" "information about this and that")
   (is (= (-> (object-store/get-info connection store-name "info.txt")
-             (select-keys [::object/digest
+             (select-keys [::object/bucket
                            ::object/chunks
+                           ::object/digest
                            ::object/name
                            ::object/size-bytes]))
-         {:nats.object/digest "SHA-256=QcnWjqprxqQ-XfobO-nWBZBd9AEeZ-R4wVxgKFnE2BI=",
-          :nats.object/chunks 1,
-          :nats.object/name "info.txt",
+         {:nats.object/bucket store-name
+          :nats.object/chunks 1
+          :nats.object/digest "SHA-256=QcnWjqprxqQ-XfobO-nWBZBd9AEeZ-R4wVxgKFnE2BI="
+          :nats.object/name "info.txt"
           :nats.object/size-bytes 31}))
 
   (testing "put-str returns mostly the same as get-info"
