@@ -174,7 +174,7 @@
   (String. (get-bytes conn bucket object-name) "UTF-8"))
 
 (defn list
-  "List information for all objects in bucket, without transferring any objects"
+  "List object information for all objects in bucket"
   [conn bucket]
   (let [object-store (Connection/.objectStore (:conn @conn) bucket)]
     (map ObjectInfo->map (ObjectStore/.getList object-store))))
@@ -182,9 +182,8 @@
 (defn get-info
   "Get information about an object, without transferring the object itself
 
-  - For objects that never have existed, returns nil.
-  - For objects that have existed and have been deleted, return object info
-    if :nats.object/include-deleted? is set, otherwise nil."
+  Pass :nats.object/include-deleted? to get information about deleted objects.
+  Returns nil if no object was found. "
   [conn bucket ^String object-name & {::object/keys [include-deleted?]}]
   (let [object-store (Connection/.objectStore (:conn @conn) bucket)]
     (some-> (if include-deleted?
@@ -195,8 +194,8 @@
 (defn delete
   "Delete object given its name
 
-  Idempotent except for :nats.object/modified-zdt, which may or may not change
-  on extra deletes."
+  Idempotent except for :nats.object/modified-zdt, which may change if delete is
+  called more times."
   [conn bucket ^String object-name]
   (let [object-store (Connection/.objectStore (:conn @conn) bucket)]
     (some-> (ObjectStore/.delete object-store object-name) ObjectInfo->map)))
@@ -204,8 +203,8 @@
 (defn seal!
   "Prohibit future mutation of this object store
 
-  Idempotent, calls return status for this bucket, except :nats.stream/timestamp
-  for the backing stream"
+  Return status for this bucket. Idempotent except for :nats.stream/timestamp
+  for the backing stream. "
   [conn bucket]
   (-> (ObjectStore/.seal (Connection/.objectStore (:conn @conn) bucket))
       object-store-status->map))
