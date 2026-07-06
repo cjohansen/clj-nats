@@ -186,6 +186,14 @@
     (testing "... but the link target remains."
       (is (false? (::object/deleted? (object-store/get-info connection store-name "norge-brazil.txt")))))))
 
+(def bucket-link-store-name "clj-nats-object-store-testdata-bucket-link")
+
+(deftest bucket-link
+  (prepare-fresh-bucket bucket-link-store-name)
+  (object-store/add-bucket-link connection store-name "link-to-bucket.link" bucket-link-store-name)
+  (is (= {:nats.object/bucket bucket-link-store-name}
+         (object-store/resolve-link connection store-name "link-to-bucket.link"))))
+
 (comment
   ;; Typical workflow: demonstrate an Object Store capability with the Java API,
   ;; then look for an alternative in idiomatic Clojure.

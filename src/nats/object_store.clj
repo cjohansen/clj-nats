@@ -255,15 +255,22 @@
 (defn unwatch [subscription]
   (NatsObjectStoreWatchSubscription/.close subscription))
 
-(defn resolve-link [conn bucket link-name]
+(defn resolve-link
+  "Resolve links to buckets or objects
+
+  Returns a map of :nats.object/bucket and :nats.object/bucket when the link
+  target is an object, a map of :nats.object/bucket when the link target is a bucket,
+  nil otherwise."
+  [conn bucket link-name]
   (when-let [objectLink
              (some-> (Connection/.objectStore (:conn @conn) bucket)
                      (ObjectStore/.getInfo link-name)
                      ObjectInfo/.getObjectMeta
                      ObjectMeta/.getObjectMetaOptions
                      ObjectMetaOptions/.getLink)]
-    {:nats.object/bucket (ObjectLink/.getBucket objectLink)
-     :nats.object/name (ObjectLink/.getObjectName objectLink)}))
+    (cond-> {:nats.object/bucket (ObjectLink/.getBucket objectLink)}
+      (ObjectLink/.getObjectName objectLink)
+      (assoc :nats.object/name (ObjectLink/.getObjectName objectLink)))))
 
 (defn add-link
   ([conn bucket name target]
@@ -274,3 +281,9 @@
         link-name
         (ObjectInfo$Builder/.build (ObjectInfo/builder target-bucket target-name)))
        ObjectInfo->map)))
+
+(defn add-bucket-link [conn link-bucket link-name target-bucket]
+  (ObjectStore/.addBucketLink
+   (Connection/.objectStore (:conn @conn) link-bucket)
+   link-name
+   (Connection/.objectStore (:conn @conn) target-bucket)))
