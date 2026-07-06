@@ -2,7 +2,8 @@
   "Object Store lets you store, list and watch binary large objects (BLOBs)"
   (:refer-clojure :exclude [list])
   (:import (io.nats.client Connection ObjectStore ObjectStoreManagement ObjectStoreOptions ObjectStoreOptions$Builder)
-           (io.nats.client.api ObjectInfo ObjectStoreConfiguration ObjectStoreConfiguration$Builder
+           (io.nats.client.api ObjectInfo ObjectInfo$Builder ObjectStoreConfiguration ObjectStoreConfiguration$Builder
+                               ObjectMeta ObjectMetaOptions ObjectLink
                                ObjectStoreStatus ObjectStoreWatcher ObjectStoreWatchOption
                                Placement StorageType)
            (io.nats.client.impl NatsObjectStoreWatchSubscription)
@@ -253,3 +254,23 @@
 
 (defn unwatch [subscription]
   (NatsObjectStoreWatchSubscription/.close subscription))
+
+(defn resolve-link [conn bucket link-name]
+  (when-let [objectLink
+             (some-> (Connection/.objectStore (:conn @conn) bucket)
+                     (ObjectStore/.getInfo link-name)
+                     ObjectInfo/.getObjectMeta
+                     ObjectMeta/.getObjectMetaOptions
+                     ObjectMetaOptions/.getLink)]
+    {:nats.object/bucket (ObjectLink/.getBucket objectLink)
+     :nats.object/name (ObjectLink/.getObjectName objectLink)}))
+
+(defn add-link
+  ([conn bucket name target]
+   (add-link conn bucket name bucket target))
+  ([conn link-bucket link-name ^String target-bucket ^String target-name]
+   (-> (ObjectStore/.addLink
+        (Connection/.objectStore (:conn @conn) link-bucket)
+        link-name
+        (ObjectInfo$Builder/.build (ObjectInfo/builder target-bucket target-name)))
+       ObjectInfo->map)))

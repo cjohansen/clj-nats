@@ -166,6 +166,26 @@
              (map #(select-keys % [::object/digest ::object/name])
                   (deref infos)))))))
 
+(deftest link
+  (object-store/put-str connection store-name "norge-brazil.txt" "final result: 2-1!")
+  (object-store/add-link connection store-name "norgeskamp.txt.link" "norge-brazil.txt")
+
+  (testing "resolve link"
+    (is (= {:nats.object/bucket "clj-nats-object-store-testdata",
+            :nats.object/name "norge-brazil.txt"}
+           (object-store/resolve-link connection store-name "norgeskamp.txt.link"))))
+
+  (testing "resolve nils if input isn't a link"
+    (is (nil? (object-store/resolve-link connection store-name "norge-brazil.txt")))
+    (is (nil? (object-store/resolve-link connection store-name "doesn't even exist"))))
+
+  (testing "deleting a link"
+    (object-store/add-link connection store-name "link-to-delete.txt.link" "norge-brazil.txt")
+    (object-store/delete connection store-name "link-to-delete.txt.link")
+    (is (nil? (object-store/resolve-link connection store-name "link-to-delete.txt.link")))
+    (testing "... but the link target remains."
+      (is (false? (::object/deleted? (object-store/get-info connection store-name "norge-brazil.txt")))))))
+
 (comment
   ;; Typical workflow: demonstrate an Object Store capability with the Java API,
   ;; then look for an alternative in idiomatic Clojure.
