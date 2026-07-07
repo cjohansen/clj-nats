@@ -6,7 +6,8 @@
            (io.nats.client.impl AckType Headers NatsJetStreamMetaData NatsMessage
                                 NatsMessage$Builder)
            (io.nats.client.support Status)
-           (java.nio.charset StandardCharsets)))
+           (java.nio.charset StandardCharsets)
+           (java.util Collection)))
 
 (def ack-types
   {:nats.ack-type/ack AckType/AckAck
@@ -20,10 +21,11 @@
 (defn ^:no-doc map->Headers [headers]
   (let [headers-obj ^Headers (Headers.)]
     (doseq [[k v] headers]
-      (->> (cond-> v
-             (not (coll? v)) vector)
-           (map str)
-           (.add headers-obj (name k))))
+      (let [^String k-str (name k)
+            ^Collection v-strs (->> (cond-> v
+                                      (not (coll? v)) vector)
+                                    (map str))]
+        (Headers/.add headers-obj k-str v-strs)))
     headers-obj))
 
 (defn ^:no-doc headers->map [^Headers headers]
@@ -43,7 +45,7 @@
 
      (string? data)
      {:kind ::string
-      :data (.getBytes data StandardCharsets/UTF_8)}
+      :data (String/.getBytes data StandardCharsets/UTF_8)}
 
      :else
      {:kind ::edn
@@ -54,15 +56,15 @@
     (= ::string kind) (assoc "content-type" ["text/plain"])
     (= ::edn kind) (assoc "content-type" ["application/edn"])))
 
-(defn build-message [{::keys [subject headers data reply-to]}]
+(defn build-message ^Message [{::keys [subject headers ^bytes data reply-to]}]
   (let [{:keys [kind data]} (get-message-body headers data)
-        headers (set-content-type headers kind)]
-    (cond-> ^NatsMessage$Builder (NatsMessage/builder)
-      subject (.subject subject)
-      reply-to (.replyTo reply-to)
-      headers (.headers (map->Headers headers))
-      data (.data data)
-      :always (.build))))
+        headers (set-content-type headers kind)
+        builder (NatsMessage/builder)]
+    (when subject (.subject builder subject))
+    (when reply-to (.replyTo builder reply-to))
+    (when headers (.headers builder (map->Headers headers)))
+    (when data (.data builder ^bytes data))
+    (.build builder)))
 
 (defn ^:no-doc bytes->edn [^bytes data {:keys [edn-reader-opts]}]
   (let [s (String. data)]
@@ -71,7 +73,7 @@
       (catch Exception e
         (throw (ex-info "Unable to parse body of EDN message" {:data s} e))))))
 
-(defn ^:no-doc get-message-data [opt headers data]
+(defn ^:no-doc get-message-data [opt headers ^bytes data]
   (let [content-type (first (get headers "content-type"))]
     (cond-> data
       (= "text/plain" content-type) (String.)
