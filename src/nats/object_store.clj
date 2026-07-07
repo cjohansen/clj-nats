@@ -11,6 +11,7 @@
            (java.time Duration ZonedDateTime)
            (java.util Map))
   (:require [clojure.spec.alpha :as s]
+            [nats.core :as nats]
             [nats.message :as message]
             [nats.object :as-alias object]
             [nats.object-store.watch-option :as-alias watch-option]
@@ -158,7 +159,7 @@
           object-info-accessors))
 
 (defn put-bytes [conn bucket ^String object-name ^bytes bytes]
-  (let [object-store (Connection/.objectStore (:conn @conn) bucket)]
+  (let [object-store (Connection/.objectStore (nats/get-connection conn) bucket)]
     (-> (ObjectStore/.put object-store object-name bytes)
         ObjectInfo->map)))
 
@@ -166,7 +167,7 @@
   (put-bytes conn bucket object-name (String/.getBytes s "UTF-8")))
 
 (defn get-bytes ^bytes [conn bucket ^String object-name]
-  (let [object-store (Connection/.objectStore (:conn @conn) bucket)
+  (let [object-store (Connection/.objectStore (nats/get-connection conn) bucket)
         buffer (ByteArrayOutputStream/new)]
     (ObjectStore/.get object-store object-name buffer)
     (ByteArrayOutputStream/.toByteArray buffer)))
@@ -177,7 +178,7 @@
 (defn list
   "List object information for all objects in bucket"
   [conn bucket]
-  (let [object-store (Connection/.objectStore (:conn @conn) bucket)]
+  (let [object-store (Connection/.objectStore (nats/get-connection conn) bucket)]
     (map ObjectInfo->map (ObjectStore/.getList object-store))))
 
 (defn get-info
@@ -186,7 +187,7 @@
   Pass :nats.object/include-deleted? to get information about deleted objects.
   Returns nil if no object was found. "
   [conn bucket ^String object-name & {::object/keys [include-deleted?]}]
-  (let [object-store (Connection/.objectStore (:conn @conn) bucket)]
+  (let [object-store (Connection/.objectStore (nats/get-connection conn) bucket)]
     (some-> (if include-deleted?
               (ObjectStore/.getInfo object-store object-name true)
               (ObjectStore/.getInfo object-store object-name))
@@ -198,7 +199,7 @@
   Idempotent except for :nats.object/modified-zdt, which may change if delete is
   called more times."
   [conn bucket ^String object-name]
-  (let [object-store (Connection/.objectStore (:conn @conn) bucket)]
+  (let [object-store (Connection/.objectStore (nats/get-connection conn) bucket)]
     (some-> (ObjectStore/.delete object-store object-name) ObjectInfo->map)))
 
 (defn seal!
@@ -207,7 +208,7 @@
   Return status for this bucket. Idempotent except for :nats.stream/timestamp
   for the backing stream. "
   [conn bucket]
-  (-> (ObjectStore/.seal (Connection/.objectStore (:conn @conn) bucket))
+  (-> (ObjectStore/.seal (Connection/.objectStore (nats/get-connection conn) bucket))
       object-store-status->map))
 
 (def watch-option-enums
@@ -270,7 +271,7 @@
                     (endOfData [_this]
                       (when on-end-of-data
                         (on-end-of-data)))))]
-    (ObjectStore/.watch (Connection/.objectStore (:conn @conn) bucket)
+    (ObjectStore/.watch (Connection/.objectStore (nats/get-connection conn) bucket)
                         watcher
                         (->> watch-options
                              (map watch-option-enums)
@@ -287,7 +288,7 @@
   bucket, nil otherwise."
   [conn bucket link-name]
   (when-let [objectLink
-             (some-> (Connection/.objectStore (:conn @conn) bucket)
+             (some-> (Connection/.objectStore (nats/get-connection conn) bucket)
                      (ObjectStore/.getInfo link-name)
                      ObjectInfo/.getObjectMeta
                      ObjectMeta/.getObjectMetaOptions
@@ -301,13 +302,13 @@
    (add-link conn bucket name bucket target))
   ([conn link-bucket link-name ^String target-bucket ^String target-name]
    (-> (ObjectStore/.addLink
-        (Connection/.objectStore (:conn @conn) link-bucket)
+        (Connection/.objectStore (nats/get-connection conn) link-bucket)
         link-name
         (ObjectInfo$Builder/.build (ObjectInfo/builder target-bucket target-name)))
        ObjectInfo->map)))
 
 (defn add-bucket-link [conn link-bucket link-name target-bucket]
   (ObjectStore/.addBucketLink
-   (Connection/.objectStore (:conn @conn) link-bucket)
+   (Connection/.objectStore (nats/get-connection conn) link-bucket)
    link-name
-   (Connection/.objectStore (:conn @conn) target-bucket)))
+   (Connection/.objectStore (nats/get-connection conn) target-bucket)))
