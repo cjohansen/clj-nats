@@ -282,9 +282,9 @@
 (defn resolve-link
   "Resolve links to buckets or objects
 
-  Returns a map of :nats.object/bucket and :nats.object/bucket when the link
-  target is an object, a map of :nats.object/bucket when the link target is a bucket,
-  nil otherwise."
+  Returns a map of `:nats.object/bucket` and `:nats.object/bucket` when the link
+  target is an object, a map of `:nats.object/bucket` when the link target is a
+  bucket, nil otherwise."
   [conn bucket link-name]
   (when-let [objectLink
              (some-> (Connection/.objectStore (:conn @conn) bucket)
