@@ -13,6 +13,7 @@
   (:require [clojure.spec.alpha :as s]
             [nats.message :as message]
             [nats.object :as-alias object]
+            [nats.object-store.watch-option :as-alias watch-option]
             [nats.stream :as stream]))
 
 ;; Map data classes to maps
@@ -209,26 +210,49 @@
   (-> (ObjectStore/.seal (Connection/.objectStore (:conn @conn) bucket))
       object-store-status->map))
 
+(def watch-option-enums
+  {::watch-option/ignore-delete ObjectStoreWatchOption/IGNORE_DELETE
+   ::watch-option/updates-only ObjectStoreWatchOption/UPDATES_ONLY
+   ;; ::watch-option/include-history ObjectStoreWatchOption/INCLUDE_HISTORY
+   ;; ObjectStoreWatchOption/INCLUDE_HISTORY is not mapped. According to the
+   ;; JVM library author, INCLUDE_HISTORY only makes sense for KVs;
+   ;;
+   ;; > include history really only applies to a key value bucket. In fact as I
+   ;; > look at the test, I don't even have a test for object store watcher with
+   ;; > history, since whenever you put an object under the name an old version
+   ;; > is deleted.
+   ;; >
+   ;; > so really the usefulness of the object store history is to see when
+   ;; > something has been put and when something has been deleted.
+   })
+
 (defn watch
-  "Watch an object store for changes.
+  "Watch an object store for changes via a backing NATS consumer.
 
-  Optionally also iterate over the changes that happened before the watcher was
-  created. An object store watcher will create a NATS consumer.
+  `on-change` function of a map of object information, called for each change to
+  the bucket.
 
-  - `on-change` is called for each change to the bucket with a map of
-    information about the changed object.
-  - `on-end-of-data` (optional) is called when all historical events untill the
-    present have been consumed.
-  - `get-consumer-name-prefix` (optional) sets the prefix for the NATS consumer
-    backing the watcher.
+  `on-end-of-data` (optional) zero argument function that will be called when
+  all historical events untill the present have been consumed.
+
+  `get-consumer-name-prefix` (optional) function that sets the prefix for the
+  NATS consumer backing the watcher.
+
+  `watch-options` (optional, set of keywords) alters when `on-change` is called.
+    - By default, `on-change` is called on deletes and purges.
+      `:nats.object-store.watch-option/ignore-delete` will ignore these.
+
+    - By default, `on-change` is called with all historical changes for the
+      bucket. Set `:nats.object-store.watch-option/updates-only` to ignore
+      historical changes and only get new changes after the watch call.
 
   watch returns a subscription, which must be closed to avoid resource leaks.
-  Either use a with-open block,
+  Either use a with-open block:
 
-    (with-open [_ (object-store/watch conn store)]
+    (with-open [_ (object-store/watch conn store (fn [object-info] ,,,))]
       ,,,)
 
-  , or call object-store/unwatch when you're done with it."
+  Or call object-store/unwatch when you're done."
   ^NatsObjectStoreWatchSubscription
   [conn bucket on-change & {:keys [on-end-of-data get-consumer-name-prefix watch-options]}]
   (let [watcher (if get-consumer-name-prefix
@@ -248,8 +272,9 @@
                         (on-end-of-data)))))]
     (ObjectStore/.watch (Connection/.objectStore (:conn @conn) bucket)
                         watcher
-                        ;; TODO qualified kewords for watch options, pass a set
-                        (make-array ObjectStoreWatchOption 0))))
+                        (->> watch-options
+                             (map watch-option-enums)
+                             (into-array ObjectStoreWatchOption)))))
 
 (defn unwatch [subscription]
   (NatsObjectStoreWatchSubscription/.close subscription))

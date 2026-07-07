@@ -2,7 +2,8 @@
   (:require [clojure.test :refer [deftest is testing]]
             [nats.core :as nats]
             [nats.object :as-alias object]
-            [nats.object-store :as object-store])
+            [nats.object-store :as object-store]
+            [nats.object-store.watch-option :as-alias watch-option])
   (:import (java.util Arrays)))
 
 (defonce connection (nats/connect "nats://localhost:4222"))
@@ -164,7 +165,52 @@
                {::object/digest "SHA-256=AgapeEOxuk-7FH1HJVDsO17oqsrfNwdSIVckCUDRvr0=",
                 ::object/name "hi2.txt"})
              (map #(select-keys % [::object/digest ::object/name])
-                  (deref infos)))))))
+                  (deref infos))))))
+
+  (testing "watch options"
+    (testing "ignore delete"
+      (testing "default behavior includes deletes"
+        (let [infos (atom [])
+              on-change #(swap! infos conj %)
+              ready? (promise)
+              on-end-of-data #(deliver ready? ::end-of-data)]
+          (prepare-fresh-bucket watch-store-name)
+          (object-store/put-str connection watch-store-name "message.txt" "ohai!")
+          (object-store/delete connection watch-store-name "message.txt")
+          (with-open [_ (object-store/watch connection watch-store-name on-change
+                                            {:on-end-of-data on-end-of-data})]
+            @ready?
+            (is (= [{::object/deleted? true}]
+                   (mapv #(select-keys % [::object/deleted?]) @infos))))))
+
+      (testing "but deletes can be ignored by setting an option"
+        (let [infos (atom [])
+              on-change #(swap! infos conj %)
+              ready? (promise)
+              on-end-of-data #(deliver ready? ::end-of-data)]
+          (prepare-fresh-bucket watch-store-name)
+          (object-store/put-str connection watch-store-name "message.txt" "ohai!")
+          (object-store/delete connection watch-store-name "message.txt")
+          (with-open [_ (object-store/watch connection watch-store-name on-change
+                                            {:on-end-of-data on-end-of-data
+                                             :watch-options #{::watch-option/ignore-delete}})]
+            @ready?
+            (is (empty? (filter ::object/deleted? @infos)))))))
+
+    (testing "updates only"
+      (let [infos (atom [])
+            on-change #(swap! infos conj %)]
+        (prepare-fresh-bucket watch-store-name)
+        ;; operation before watch call -> not notified.
+        (object-store/put-str connection watch-store-name "message1.txt" "ohai!")
+        (with-open [_ (object-store/watch connection watch-store-name on-change
+                                          {:watch-options #{::watch-option/updates-only}})]
+          ;; operation after after watch call -> notified.
+          (object-store/put-str connection watch-store-name "message2.txt" "ready for action.")
+          ;; get-info to wait a bit for watchers to get notified.
+          (object-store/get-info connection store-name "message2.txt")
+          (is (= [{::object/name "message2.txt"}]
+                 (map #(select-keys % [::object/name]) @infos))))))))
 
 (deftest link
   (object-store/put-str connection store-name "norge-brazil.txt" "final result: 2-1!")
