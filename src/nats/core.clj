@@ -2,17 +2,7 @@
   (:require [clojure.set :as set]
             [clojure.string :as str]
             [nats.message :as message])
-  (:import (io.nats.client Connection
-                           ConnectionListener
-                           ConnectionListener$Events
-                           ErrorListener
-                           Nats
-                           Options
-                           Options$Builder
-                           ReconnectDelayHandler
-                           StatisticsCollector
-                           Subscription
-                           TimeTraceLogger)
+  (:import (io.nats.client Connection ConnectionListener ConnectionListener$Events ErrorListener Nats Options Options$Builder ReconnectDelayHandler StatisticsCollector Subscription TimeTraceLogger)
            (java.time Duration ZoneId)))
 
 (def ^:no-doc connections (atom {}))
