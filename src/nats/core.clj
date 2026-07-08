@@ -5,8 +5,6 @@
   (:import (io.nats.client Connection ConnectionListener ConnectionListener$Events ErrorListener Nats Options Options$Builder ReconnectDelayHandler StatisticsCollector Subscription TimeTraceLogger)
            (java.time Duration ZoneId)))
 
-(def ^:no-doc connections (atom {}))
-
 (def ^:no-doc default-tz
   "The Java SDK uses ZonedDateTime for every instant and defaults the time zone to
    GMT. All the NATS times are instants in time, so Instant is the appropriate
@@ -94,7 +92,8 @@
   - `:socket-write-timeout`  `(fn [conn])`
   - `:supply-message`  `(fn [label conn consumer sub pairs])`
   - `:unhandled-status`  `(fn [conn subscription status])`"
-  [{:keys [error-occurred
+  [conn
+   {:keys [error-occurred
            exception-occurred
            flow-control-processed
            heartbeat-alarm
@@ -106,49 +105,49 @@
            supply-message
            unhandled-status]}]
   (reify ErrorListener
-    (errorOccurred [_this conn error]
+    (errorOccurred [_this _ error]
       (when (ifn? error-occurred)
-        (error-occurred (get @connections conn) error)))
+        (error-occurred conn error)))
 
-    (exceptionOccurred [_this conn exception]
+    (exceptionOccurred [_this _ exception]
       (when (ifn? exception-occurred)
-        (exception-occurred (get @connections conn) exception)))
+        (exception-occurred conn exception)))
 
-    (flowControlProcessed [_this conn subscription subject source]
+    (flowControlProcessed [_this _ subscription subject source]
       (when (ifn? flow-control-processed)
-        (flow-control-processed (get @connections conn) subscription subject source)))
+        (flow-control-processed conn subscription subject source)))
 
-    (heartbeatAlarm [_this conn subscription last-stream-seq last-consumer-seq]
+    (heartbeatAlarm [_this _ subscription last-stream-seq last-consumer-seq]
       (when (ifn? heartbeat-alarm)
-        (heartbeat-alarm (get @connections conn) subscription last-stream-seq last-consumer-seq)))
+        (heartbeat-alarm conn subscription last-stream-seq last-consumer-seq)))
 
-    (messageDiscarded [_this conn message]
+    (messageDiscarded [_this _ message]
       (when (ifn? message-discarded)
-        (message-discarded (get @connections conn) (message/message->map @conn message))))
+        (message-discarded conn (message/message->map @conn message))))
 
-    (pullStatusError [_this conn subscription status]
+    (pullStatusError [_this _ subscription status]
       (when (ifn? pull-status-error)
-        (pull-status-error (get @connections conn) subscription (message/status->map status))))
+        (pull-status-error conn subscription (message/status->map status))))
 
-    (pullStatusWarning [_this conn subscription status]
+    (pullStatusWarning [_this _ subscription status]
       (when (ifn? pull-status-warning)
-        (pull-status-warning (get @connections conn) subscription (message/status->map status))))
+        (pull-status-warning conn subscription (message/status->map status))))
 
-    (slowConsumerDetected [_this conn consumer]
+    (slowConsumerDetected [_this _ consumer]
       (when (ifn? slow-consumer-detected)
-        (slow-consumer-detected (get @connections conn) consumer)))
+        (slow-consumer-detected conn consumer)))
 
-    (socketWriteTimeout [_this conn]
+    (socketWriteTimeout [_this _]
       (when (ifn? socket-write-timeout)
-        (socket-write-timeout (get @connections conn))))
+        (socket-write-timeout conn)))
 
-    (supplyMessage [_this label conn consumer sub pairs]
+    (supplyMessage [_this label _ consumer sub pairs]
       (when (ifn? supply-message)
         (supply-message label conn consumer sub pairs)))
 
-    (unhandledStatus [_this conn subscription status]
+    (unhandledStatus [_this _ subscription status]
       (when (ifn? unhandled-status)
-        (unhandled-status (get @connections conn) subscription (message/status->map status))))))
+        (unhandled-status conn subscription (message/status->map status))))))
 
 (defn ^:export create-statistics-collector
   "Create a `io.nats.client.StatisticsCollector` instance. Takes a map of
@@ -296,7 +295,8 @@
 (def ^:no-doc connection-event->k (set/map-invert connection-events))
 
 (defn build-options ^Options
-  [{::keys [auth-handler ;; AuthHandler
+  [conn
+   {::keys [auth-handler ;; AuthHandler
             buffer-size
             client-side-limit-checks
             connection-listener ;; fn
@@ -370,8 +370,8 @@
     client-side-limit-checks (.clientSideLimitChecks client-side-limit-checks)
     connection-listener (.connectionListener
                          (reify ConnectionListener
-                           (connectionEvent [_this conn event]
-                             (connection-listener (get @connections conn) (connection-event->k event)))))
+                           (connectionEvent [_this _ event]
+                             (connection-listener conn (connection-event->k event)))))
     connection-name (.connectionName connection-name)
     (int? connection-timeout) (.connectionTimeout ^long connection-timeout)
     (instance? java.time.Duration connection-timeout) (.connectionTimeout ^java.time.Duration connection-timeout)
@@ -522,14 +522,13 @@
   - `:nats.core/use-timeout-exception?`
   - `:nats.core/verbose?`"
   [server-url-or-options & [{:keys [jet-stream-options key-value-options edn-reader-opts]}]]
-  (let [conn (if (string? server-url-or-options)
-               (Nats/connect ^String server-url-or-options)
-               (Nats/connect (build-options server-url-or-options)))
-        clj-conn (atom {:conn conn
-                        :edn-reader-opts edn-reader-opts
+  (let [clj-conn (atom {:edn-reader-opts edn-reader-opts
                         :jet-stream-options jet-stream-options
-                        :key-value-options key-value-options})]
-    (swap! connections assoc conn clj-conn)
+                        :key-value-options key-value-options})
+        conn (if (string? server-url-or-options)
+               (Nats/connect ^String server-url-or-options)
+               (Nats/connect (build-options clj-conn server-url-or-options)))]
+    (swap! clj-conn assoc :conn conn)
     clj-conn))
 
 (defn ^:no-doc get-connection ^Connection [conn]
@@ -537,7 +536,6 @@
 
 (defn ^:export close [conn]
   (let [jconn (get-connection conn)]
-    (swap! connections dissoc jconn)
     (.close jconn)))
 
 (defn ^{:style/indent 1 :export true} publish
