@@ -10,7 +10,7 @@
            (io.nats.client.api AccountLimits AccountStatistics AccountTier ApiStats
                                CompressionOption ConsumerLimits DiscardPolicy External MirrorInfo
                                Placement Republish RetentionPolicy SourceBase SourceInfo
-                               StorageType StreamConfiguration StreamInfo StreamInfoOptions
+                               StorageType StreamConfiguration StreamConfiguration$Builder StreamInfo StreamInfoOptions
                                StreamInfoOptions$Builder StreamState Subject SubjectTransform)))
 
 ;; Enums as keywords
@@ -234,23 +234,38 @@
             ^long max-messages-per-subject
             ^int max-msg-size
             ^int replicas] :as opts}]
-  (cond-> (StreamConfiguration/builder)
-    (::name opts) (.name (::name opts))
-    description (.description description)
-    (boolean? allow-direct?) (.allowDirect allow-direct?)
-    (boolean? allow-rollup?) (.allowRollup allow-rollup?)
-    (boolean? deny-delete?) (.denyDelete deny-delete?)
-    (boolean? deny-purge?) (.denyPurge deny-purge?)
-    max-age (.maxAge max-age)
-    max-bytes (.maxBytes max-bytes)
-    max-consumers (.maxConsumers max-consumers)
-    max-messages (.maxMessages max-messages)
-    max-messages-per-subject (.maxMessagesPerSubject max-messages-per-subject)
-    max-msg-size (.maxMsgSize max-msg-size)
-    replicas (.replicas replicas)
-    subjects (.subjects (into-array String subjects))
-    retention-policy (.retentionPolicy (retention-policies retention-policy))
-    :always (.build)))
+  (let [builder (StreamConfiguration/builder)]
+    (when (::name opts) (.name builder (::name opts)))
+    (when description (.description builder description))
+    (when (boolean? allow-direct?)
+      (.allowDirect builder allow-direct?))
+    (when (boolean? allow-rollup?)
+      (.allowRollup builder allow-rollup?))
+    (when (boolean? deny-delete?)
+      (.denyDelete builder deny-delete?))
+    (when (boolean? deny-purge?)
+      (.denyPurge builder deny-purge?))
+    (when (= java.lang.Long (type max-age))
+      (StreamConfiguration$Builder/.maxAge builder ^long max-age))
+    (when (instance? java.time.Duration max-age)
+      (StreamConfiguration$Builder/.maxAge builder ^java.time.Duration max-age))
+    (when max-bytes
+      (.maxBytes builder max-bytes))
+    (when max-consumers
+      (.maxConsumers builder max-consumers))
+    (when max-messages
+      (.maxMessages builder max-messages))
+    (when max-messages-per-subject
+      (.maxMessagesPerSubject builder max-messages-per-subject))
+    (when max-msg-size
+      (.maxMsgSize builder max-msg-size))
+    (when replicas
+      (.replicas builder replicas))
+    (when subjects
+      (StreamConfiguration$Builder/.subjects builder ^String/1 (into-array String subjects)))
+    (when retention-policy
+      (.retentionPolicy builder (retention-policies retention-policy)))
+    (.build builder)))
 
 (defn ^:no-doc build-publish-options
   [{:nats.publish/keys [expected-last-msg-id
@@ -392,17 +407,17 @@
       .getAccountStatistics
       account-statistics->map))
 
-(defn ^:export get-first-message [conn stream-name subject]
+(defn ^:export get-first-message [conn ^String stream-name ^String subject]
   (-> (jet-stream-management conn)
       (.getFirstMessage stream-name subject)
       (message/message-info->map @conn)))
 
-(defn ^:export get-last-message [conn stream-name subject]
+(defn ^:export get-last-message [conn ^String stream-name ^String subject]
   (-> (jet-stream-management conn)
       (.getLastMessage stream-name subject)
       (message/message-info->map @conn)))
 
-(defn ^:export get-message [conn stream-name seq]
+(defn ^:export get-message [conn ^String stream-name ^long seq]
   (-> (jet-stream-management conn)
       (.getMessage stream-name seq)
       (message/message-info->map @conn)))
