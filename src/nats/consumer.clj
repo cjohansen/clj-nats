@@ -2,6 +2,7 @@
   (:require [clojure.set :as set]
             [nats.cluster :as cluster]
             [nats.core :as nats]
+            [nats.internals :refer [->duration ->durations]]
             [nats.message :as message]
             [nats.stream :as stream])
   (:import (io.nats.client ConsumeOptions ConsumeOptions$Builder IterableConsumer)
@@ -135,43 +136,41 @@
     (assert (or (not durable?) (not (nil? consumer-name))) "Durable consumers must have a :nats.consumer/name")
     (cond-> ^ConsumerConfiguration$Builder (ConsumerConfiguration/builder)
       (ack-policies ack-policy) (.ackPolicy (ack-policies ack-policy))
-      ack-wait (.ackWait ack-wait)
-      backoff (.backoff backoff)
+      ack-wait (.ackWait (->duration ack-wait))
+      backoff (.backoff (->durations backoff))
       deliver-group (.deliverGroup deliver-group)
       (deliver-policies deliver-policy) (.deliverPolicy (deliver-policies deliver-policy))
       deliver-subject (.deliverSubject deliver-subject)
       description (.description description)
       durable? (.durable consumer-name)
-      filter-subjects (.filterSubjects (into-array String filter-subjects))
-      flow-control (.flowControl flow-control)
+      filter-subjects (.filterSubjects ^String/1 (into-array String filter-subjects))
+      flow-control (.flowControl (->duration flow-control))
       headers-only? (.headersOnly headers-only?)
-      idle-heartbeat (.idleHeartbeat idle-heartbeat)
-      inactive-threshold (.inactiveThreshold inactive-threshold)
-      max-ack-pending (.maxAckPending max-ack-pending)
-      max-batch (.maxBatch max-batch)
-      max-bytes (.maxBytes max-bytes)
-      max-deliver (.maxDeliver max-deliver)
-      max-expires (.maxExpires max-expires)
-      max-pull-waiting (.maxPullWaiting max-pull-waiting)
+      idle-heartbeat (.idleHeartbeat (->duration idle-heartbeat))
+      inactive-threshold (.inactiveThreshold (->duration inactive-threshold))
+      max-ack-pending (.maxAckPending ^long max-ack-pending)
+      max-batch (.maxBatch ^long max-batch)
+      max-bytes (.maxBytes ^long max-bytes)
+      max-deliver (.maxDeliver ^long max-deliver)
+      max-expires (.maxExpires (->duration max-expires))
+      max-pull-waiting (.maxPullWaiting ^long max-pull-waiting)
       mem-storage? (.memStorage mem-storage?)
       metadata (.metadata metadata)
       (and consumer-name (not durable?)) (.name consumer-name)
       replicas (.numReplicas replicas)
       pause-until (.pauseUntil pause-until)
-      rate-limit (.rateLimit rate-limit)
+      rate-limit (.rateLimit ^long rate-limit)
       (replay-policies replay-policy) (.replayPolicy (replay-policies replay-policy))
       sample-frequency (.sampleFrequency sample-frequency)
-      start-sequence (.startSequence start-sequence)
-      start-time (.startTime (.atZone start-time nats/default-tz))
+      start-sequence (.startSequence ^long start-sequence)
+      start-time (.startTime (.atZone ^java.time.Instant start-time nats/default-tz))
       :then (.build))))
 
-(defn ^:no-doc build-consume-options [{:keys [batch-bytes batch-size bytes threshold-pct]}]
-  (cond-> ^ConsumeOptions$Builder (ConsumeOptions/builder)
-    batch-bytes (.batchBytes batch-bytes)
-    batch-size (.batchSize batch-size)
-    bytes (.bytes bytes)
-    threshold-pct (.thresholdPercent threshold-pct)
-    :then (.build)))
+(defn ^:no-doc build-consume-options [{:keys [batch-bytes batch-size]}]
+  (let [^ConsumeOptions$Builder builder (ConsumeOptions/builder)]
+    (when batch-bytes (.batchBytes builder batch-bytes))
+    (when batch-size (.batchSize builder batch-size))
+    (.build builder)))
 
 ;; Public API
 
@@ -299,7 +298,7 @@
       (let [elapsed (- now start)]
         (when (< elapsed timeout)
           (let [wait (min 100 (- timeout elapsed))]
-            (if-let [message (some->> (.nextMessage subscription wait)
+            (if-let [message (some->> (.nextMessage ^IterableConsumer subscription (->duration wait))
                                       (message/message->map opt))]
               message
               (recur (System/nanoTime)))))))))
