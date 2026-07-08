@@ -1,21 +1,18 @@
 (ns nats.object-store
   "Object Store lets you store, list and watch binary large objects (BLOBs)"
   (:refer-clojure :exclude [list])
-  (:import (io.nats.client Connection ObjectStore ObjectStoreManagement ObjectStoreOptions ObjectStoreOptions$Builder)
-           (io.nats.client.api ObjectInfo ObjectInfo$Builder ObjectStoreConfiguration ObjectStoreConfiguration$Builder
-                               ObjectMeta ObjectMetaOptions ObjectLink
-                               ObjectStoreStatus ObjectStoreWatcher ObjectStoreWatchOption
-                               Placement StorageType)
-           (io.nats.client.impl NatsObjectStoreWatchSubscription)
-           (java.io ByteArrayOutputStream)
-           (java.time Duration ZonedDateTime)
-           (java.util Map))
   (:require [clojure.spec.alpha :as s]
             [nats.core :as nats]
             [nats.message :as message]
             [nats.object :as-alias object]
             [nats.object-store.watch-option :as-alias watch-option]
-            [nats.stream :as stream]))
+            [nats.stream :as stream])
+  (:import (io.nats.client Connection ObjectStore ObjectStoreManagement ObjectStoreOptions ObjectStoreOptions$Builder)
+           (io.nats.client.api ObjectInfo ObjectInfo$Builder ObjectLink ObjectMeta ObjectMetaOptions ObjectStoreConfiguration ObjectStoreConfiguration$Builder ObjectStoreStatus ObjectStoreWatcher ObjectStoreWatchOption Placement StorageType)
+           (io.nats.client.impl NatsObjectStoreWatchSubscription)
+           (java.io ByteArrayOutputStream)
+           (java.time Duration ZonedDateTime)
+           (java.util Map)))
 
 ;; Map data classes to maps
 
