@@ -1,24 +1,15 @@
 (ns nats.kv
+  (:refer-clojure :exclude [get])
   (:require [clojure.set :as set]
             [nats.core :as nats]
+            [nats.internals :refer [->duration]]
             [nats.message :as message]
             [nats.stream :as stream])
-  (:refer-clojure :exclude [get])
-  (:import (io.nats.client KeyValueOptions KeyValueOptions$Builder
-                           Message)
-           (io.nats.client.api External External$Builder
-                               KeyValueConfiguration KeyValueConfiguration$Builder
-                               KeyValueEntry KeyValueOperation KeyValueStatus
-                               KeyValuePurgeOptions KeyValuePurgeOptions$Builder
-                               KeyValueWatcher KeyValueWatchOption
-                               MessageInfo Mirror Mirror$Builder
-                               Placement Placement$Builder
-                               Republish Republish$Builder
-                               Source Source$Builder
-                               SubjectTransform SubjectTransform$Builder)
+  (:import (io.nats.client Connection KeyValueManagement KeyValueOptions KeyValueOptions$Builder Message)
+           (io.nats.client.api External External$Builder KeyValueConfiguration KeyValueConfiguration$Builder KeyValueEntry KeyValueOperation KeyValuePurgeOptions KeyValuePurgeOptions$Builder KeyValueStatus KeyValueWatcher KeyValueWatchOption MessageInfo Mirror Mirror$Builder Placement Placement$Builder Republish Republish$Builder StorageType Source Source$Builder SubjectTransform SubjectTransform$Builder)
            (io.nats.client.impl CljNatsKeyValue)
            (io.nats.client.support NatsKeyValueUtil)
-           (java.time Duration)
+           (java.time Duration Instant)
            (java.util ArrayList)))
 
 ;; Enums
@@ -112,26 +103,28 @@
 
 ;; Build options
 
-(defn ^:no-doc build-kvo-options [{::keys [stream-options domain prefix request-timeout]}]
-  (cond-> (proxy [KeyValueOptions$Builder] []
-            (jetStreamOptions [options]
-              (proxy-super jetStreamOptions options))
+(defn ^:no-doc build-kvo-options ^KeyValueOptions [{::keys [stream-options domain prefix request-timeout]}]
+  (cond->
+      ^KeyValueOptions$Builder
+      (proxy [KeyValueOptions$Builder] []
+        (jetStreamOptions [options]
+          (proxy-super jetStreamOptions options))
 
-            (jsDomain [domain]
-              (proxy-super jsDomain domain))
+        (jsDomain [domain]
+          (proxy-super jsDomain domain))
 
-            (jsPrefix [prefix]
-              (proxy-super jsPrefix prefix))
+        (jsPrefix [prefix]
+          (proxy-super jsPrefix prefix))
 
-            (jsRequestTimeout [request-timeout]
-              (proxy-super jsRequestTimeout request-timeout)))
+        (jsRequestTimeout [request-timeout]
+          (proxy-super jsRequestTimeout request-timeout)))
     stream-options (.jetStreamOptions (stream/build-jet-stream-options stream-options))
     domain (.jsDomain domain)
     prefix (.jsPrefix prefix)
     request-timeout (.jsRequestTimeout request-timeout)
     :then (.build)))
 
-(defn ^:no-doc build-external-options [{:nats.external/keys [api deliver]}]
+(defn ^:no-doc build-external-options ^External [{:nats.external/keys [api deliver]}]
   (cond-> ^External$Builder (External/builder)
     api (.api api)
     deliver (.deliver deliver)
@@ -146,37 +139,41 @@
 
 (defn ^:no-doc build-source-options
   [{:nats.source/keys [domain external filter-subject name source-name
-                       start-seq start-time subject-transforms]}]
+                       start-seq ^Instant start-time subject-transforms]}]
   (cond-> ^Source$Builder (Source/builder)
     domain (.domain domain)
-    external (.external (build-external-options external))
-    filter-subject (.filterSubject filter-subject)
-    name (.name name)
-    source-name (.sourceName source-name)
-    start-seq (.startSeq start-seq)
-    start-time (.startTime (.atZone start-time nats/default-tz))
-    (seq subject-transforms) (.subjectTransforms (ArrayList. (map build-subject-transform-options subject-transforms)))
-    :then (.build)))
+    external (Source$Builder/.external (build-external-options external))
+    filter-subject (Source$Builder/.filterSubject filter-subject)
+    name (Source$Builder/.name name)
+    source-name (Source$Builder/.sourceName source-name)
+    start-seq (Source$Builder/.startSeq start-seq)
+    start-time (Source$Builder/.startTime (.atZone start-time nats/default-tz))
+    (seq subject-transforms) (Source$Builder/.subjectTransforms
+                              ^SubjectTransform/1
+                              (into-array SubjectTransform (map build-subject-transform-options subject-transforms)))
+    :then (Source$Builder/.build)))
 
 (defn ^:no-doc build-mirror-options
   [{:nats.source/keys [domain external filter-subject name source-name
-                       start-seq start-time subject-transforms]}]
-  (cond-> ^Mirror$Builder (Mirror/builder)
-    domain (.domain domain)
-    external (.external (build-external-options external))
-    filter-subject (.filterSubject filter-subject)
-    name (.name name)
-    source-name (.sourceName source-name)
-    start-seq (.startSeq start-seq)
-    start-time (.startTime (.atZone start-time nats/default-tz))
-    (seq subject-transforms) (.subjectTransforms (ArrayList. (map build-subject-transform-options subject-transforms)))
-    :then (.build)))
+                       start-seq ^Instant start-time subject-transforms]}]
+  (cond-> (Mirror/builder)
+    domain (Mirror$Builder/.domain domain)
+    external (Mirror$Builder/.external (build-external-options external))
+    filter-subject (Mirror$Builder/.filterSubject filter-subject)
+    name (Mirror$Builder/.name name)
+    source-name (Mirror$Builder/.sourceName source-name)
+    start-seq (Mirror$Builder/.startSeq start-seq)
+    start-time (Mirror$Builder/.startTime (.atZone start-time nats/default-tz))
+    (seq subject-transforms) (Mirror$Builder/.subjectTransforms
+                              ^SubjectTransform/1
+                              (into-array SubjectTransform (map build-subject-transform-options subject-transforms)))
+    :then (Mirror$Builder/.build)))
 
 (defn ^:no-doc build-placement-options
   [{:nats.placement/keys [cluster tags]}]
   (cond-> ^Placement$Builder (Placement/builder)
     cluster (.cluster cluster)
-    (seq tags) (.tags (ArrayList. (map name tags)))
+    (seq tags) (.tags ^String/1 (into-array String (map name tags)))
     :then (.build)))
 
 (defn ^:no-doc build-republish-options
@@ -203,23 +200,21 @@
             storage-type
             ttl]}]
   (cond-> ^KeyValueConfiguration$Builder (KeyValueConfiguration/builder)
-    sources (.sources (map build-source-options sources))
-    (boolean? compression?) (.compression compression?)
-    description (.description description)
-    max-bucket-size (.maxBucketSize max-bucket-size)
-    max-history-per-key (.maxHistoryPerKey max-history-per-key)
-    max-value-size (.maxValueSize max-value-size)
-    metadata (.metadata (update-keys metadata clojure.core/name))
-    mirror (.mirror (build-mirror-options mirror))
-    bucket-name (.name bucket-name)
-    placement (.placement (build-placement-options placement))
-    replicas (.replicas replicas)
-    republish (.republish (build-republish-options republish))
-    storage-type (.storageType (stream/storage-types storage-type))
-    ttl (.ttl (if (number? ttl)
-                (Duration/ofMillis ttl)
-                ttl))
-    :then (.build)))
+    sources (KeyValueConfiguration$Builder/.sources ^Source/1 (into-array Source (map build-source-options sources)))
+    (boolean? compression?) (KeyValueConfiguration$Builder/.compression ^boolean compression?)
+    description (KeyValueConfiguration$Builder/.description ^String description)
+    max-bucket-size (KeyValueConfiguration$Builder/.maxBucketSize ^long max-bucket-size)
+    max-history-per-key (KeyValueConfiguration$Builder/.maxHistoryPerKey ^long max-history-per-key)
+    max-value-size (KeyValueConfiguration$Builder/.maxValueSize ^long max-value-size)
+    metadata (KeyValueConfiguration$Builder/.metadata ^java.util.Map (update-keys metadata clojure.core/name))
+    mirror (KeyValueConfiguration$Builder/.mirror (build-mirror-options mirror))
+    bucket-name (KeyValueConfiguration$Builder/.name ^String bucket-name)
+    placement (KeyValueConfiguration$Builder/.placement ^Placement (build-placement-options placement))
+    replicas (KeyValueConfiguration$Builder/.replicas ^int replicas)
+    republish (KeyValueConfiguration$Builder/.republish ^Republish (build-republish-options republish))
+    storage-type (KeyValueConfiguration$Builder/.storageType ^StorageType (stream/storage-types storage-type))
+    ttl (KeyValueConfiguration$Builder/.ttl (->duration ttl))
+    :then (KeyValueConfiguration$Builder/.build)))
 
 ;; Helper functions
 
@@ -227,7 +222,7 @@
   (let [{:keys [kvbm conn key-value-options]} @nats-conn]
     (when-not kvbm
       (->> (build-kvo-options key-value-options)
-           (.keyValueManagement conn)
+           (Connection/.keyValueManagement conn)
            (swap! nats-conn assoc :kvbm))))
   (:kvbm @nats-conn))
 
@@ -296,13 +291,13 @@
    - `:nats.republish/source`"
   [conn config]
   (-> (bucket-management conn)
-      (.create (build-key-value-options config))
+      (KeyValueManagement/.create (build-key-value-options config))
       key-value-status->map))
 
 (defn ^:export get-bucket-status
   [conn bucket-name]
   (-> (bucket-management conn)
-      (.getStatus bucket-name)
+      (KeyValueManagement/.getStatus bucket-name)
       key-value-status->map))
 
 (defn ^{:style/indent 1 :export true} update-bucket
@@ -310,16 +305,16 @@
   [conn config]
   (let [config (merge (get-bucket-status conn (::bucket-name config)) config)]
     (-> (bucket-management conn)
-        (.update (build-key-value-options config))
+        (KeyValueManagement/.update (build-key-value-options config))
         key-value-status->map)))
 
 (defn ^:export delete-bucket
   "Delete a key/value bucket"
   [conn bucket-name]
-  (.delete (bucket-management conn) bucket-name))
+  (KeyValueManagement/.delete (bucket-management conn) bucket-name))
 
 (defn ^:export get-bucket-statuses [conn]
-  (->> (.getStatuses (bucket-management conn))
+  (->> (KeyValueManagement/.getStatuses (bucket-management conn))
        (map key-value-status->map)
        set))
 
@@ -327,7 +322,7 @@
   (let [{:keys [kind data]} (message/get-message-body v)
         all-headers (into (message/set-content-type nil kind) headers)]
     (-> (kv-management conn bucket-name)
-        (.put k data (some-> all-headers message/map->Headers)))))
+        (CljNatsKeyValue/.put k data (some-> all-headers message/map->Headers)))))
 
 (defn ^:export put
   "Put a key in the bucket. `v` can be either a byte array or any serializable
@@ -359,8 +354,8 @@
    (get conn (namespace k) (name k) rev))
   ([conn bucket-name k rev]
    (when-let [message-info (if rev
-                             (.getMessage (kv-management conn bucket-name) k rev)
-                             (.getMessage (kv-management conn bucket-name) k))]
+                             (CljNatsKeyValue/.getMessage (kv-management conn bucket-name) k rev)
+                             (CljNatsKeyValue/.getMessage (kv-management conn bucket-name) k))]
      (let [entry (message-info->key-value-entry @conn bucket-name k message-info)]
        (when (= :nats.kv-operation/put (:nats.kv.entry/operation entry))
          entry)))))
@@ -432,13 +427,13 @@
   ([conn k]
    (get-history conn (namespace k) (name k)))
   ([conn bucket-name k]
-   (->> (.getHistory (kv-management conn bucket-name) k)
+   (->> (CljNatsKeyValue/.getHistory (kv-management conn bucket-name) k)
         (map #(message->key-value-entry @conn bucket-name k %)))))
 
 (defn ^:export get-keys
   "Return a set of all the keys in the bucket as strings"
   [conn bucket-name]
-  (set (.keys (kv-management conn bucket-name))))
+  (set (CljNatsKeyValue/.keys (kv-management conn bucket-name))))
 
 (defn ^:export purge
   "Purge all history for a single key, optionally specify the expected current revision.
@@ -454,16 +449,16 @@
    (purge conn (namespace k) (name k) expected-rev))
   ([conn bucket-name k expected-rev]
    (if expected-rev
-     (.purge (kv-management conn bucket-name) k expected-rev)
-     (.purge (kv-management conn bucket-name) k))))
+     (CljNatsKeyValue/.purge (kv-management conn bucket-name) ^String k ^long expected-rev)
+     (CljNatsKeyValue/.purge (kv-management conn bucket-name) ^String k))))
 
 (defn ^:export purge-deleted
   "Purges history for deleted keys in `bucket-name`"
   [conn bucket-name & [{:keys [delete-marker-threshold]}]]
-  (.purgeDeletes
+  (CljNatsKeyValue/.purgeDeletes
    (kv-management conn bucket-name)
    (cond-> ^KeyValuePurgeOptions$Builder (KeyValuePurgeOptions/builder)
-     delete-marker-threshold (.deleteMarkersThreshold delete-marker-threshold)
+     delete-marker-threshold (.deleteMarkersThreshold (->duration delete-marker-threshold))
      :then .build)))
 
 (defn ^:export watch
@@ -480,14 +475,17 @@
                     (instance? java.util.List subjects) subjects
                     (seqable? subjects) (vec subjects)
                     :else subjects)]
-     (.watch (kv-management conn bucket-name)
-             ^java.util.List subjects
-             (reify
-               KeyValueWatcher
-               (watch [_ e] (watch (native->key-value-entry e)))
-               (endOfData [_] (when end-of-data (end-of-data)))
+     (CljNatsKeyValue/.watch
+      (kv-management conn bucket-name)
+      ^java.util.List subjects
+      ^KeyValueWatcher
+      (reify
+        KeyValueWatcher
+        (watch [_ e] (watch (native->key-value-entry e)))
+        (endOfData [_] (when end-of-data (end-of-data)))
 
-               PrefixedConsumer
-               (getConsumerNamePrefix [_] consumer-name-prefix))
-             (or from-rev -1)
-             (into-array KeyValueWatchOption (map watch-options watch-opts))))))
+        PrefixedConsumer
+        (getConsumerNamePrefix [_] consumer-name-prefix))
+      (or ^long from-rev -1)
+      ^KeyValueWatchOption/1
+      (into-array KeyValueWatchOption (map watch-options watch-opts))))))
