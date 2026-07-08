@@ -148,7 +148,7 @@
                    (finally
                      (stream/delete-stream conn stream-name)
                      (nats/close conn))))
-               .getMessage)
+               Exception/.getMessage)
            "nats.stream/publish published to a non-stream subject, and failed to ack. If you meant to publish to a stream, check the subject, else use nats.core/publish"))))
 
 (def stream-data (atom nil))
@@ -529,7 +529,7 @@
              :nats.consumer/headers-only? false
              :nats.consumer/flow-control-was-set? false
              :nats.consumer/max-ack-pending-was-set? true
-             :nats.consumer/metadata-was-set? true
+             :nats.consumer/metadata-was-set? false
              :nats.consumer/mem-storage? false
              :nats.consumer/replicas 0
              :nats.consumer/flow-control? false
@@ -779,7 +779,6 @@
             :nats.kv/description "A nice little bucket"
             :nats.kv/bucket-name "clj-nats-test"
             :nats.kv/ttl #time/dur "PT0S"
-            :nats.kv/metadata {}
             :nats.kv/replicas 1
             :nats.kv/stream-info
             {:nats.stream/configuration
