@@ -4,6 +4,9 @@ src/io/nats/client/impl/CljNatsKeyValue.class:
 test:
 	clojure -M:dev -m kaocha.runner
 
+test-latest-commit:
+	bb timemachine HEAD -- make test
+
 clean:
 	rm -f clj-nats.jar
 

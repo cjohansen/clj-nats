@@ -1,0 +1,4 @@
+{:deps {io.github.teodorlu/bb-timemachine {:git/tag "v1.0.1" :git/sha "e684cc8"}}
+ :tasks
+ {:requires ([teodorlu.bb-timemachine :as timemachine])
+  timemachine (apply timemachine/timemachine *command-line-args*)}}
