@@ -3,8 +3,7 @@
             [clojure.set :as set])
   (:import (io.nats.client Message)
            (io.nats.client.api MessageInfo PublishAck)
-           (io.nats.client.impl AckType Headers NatsJetStreamMetaData NatsMessage
-                                NatsMessage$Builder)
+           (io.nats.client.impl AckType Headers NatsJetStreamMetaData NatsMessage)
            (io.nats.client.support Status)
            (java.nio.charset StandardCharsets)
            (java.util Collection)))
