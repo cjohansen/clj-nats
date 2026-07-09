@@ -45,16 +45,22 @@
 
   (testing "put-str returns mostly the same as get-info"
     (let [message (str "Message " (rand-int 1000))]
-      ;; Why dissoc ::object/modified-zdt, you say?
+      ;; Why dissoc ::object/modified-at, you say?
       ;;
       ;; Very funny you should ask. You see, information from the put-str and
       ;; the get-info call is identical (including SHA256 digest), but the
       ;; modified timestamp is different. In my testing, the put-str call
       ;; returns a timestamp *after* the get-info call.
       (is (= (-> (object-store/put-str connection store-name "info2.txt" message)
-                 (dissoc ::object/modified-zdt))
+                 (dissoc ::object/modified-at))
              (-> (object-store/get-info connection store-name "info2.txt")
-                 (dissoc ::object/modified-zdt)))))))
+                 (dissoc ::object/modified-at))))))
+
+  (testing "modified is an instant"
+    (is (= (-> (object-store/put-str connection store-name "info2.txt" (str "Message " (rand-int 1000)))
+               ::object/modified-at
+               type)
+           java.time.Instant))))
 
 (deftest delete
   (testing "deletion"
@@ -67,12 +73,12 @@
                                        {::object/include-deleted? true})
                 "not found"))))
 
-  (testing "deletion is idempotent if we ignore the modified-zdt field (which is weird)"
+  (testing "deletion is idempotent if we ignore the modified-at field (which is weird)"
     (object-store/put-str connection store-name "deleted2.txt" "double time!")
     (is (= (-> (object-store/delete connection store-name "deleted2.txt")
-               (dissoc ::object/modified-zdt))
+               (dissoc ::object/modified-at))
            (-> (object-store/delete connection store-name "deleted2.txt")
-               (dissoc ::object/modified-zdt))))))
+               (dissoc ::object/modified-at))))))
 
 (defn has-bucket? [connection bucket-name]
   (boolean (some (comp #{bucket-name} :nats.object-store/bucket-name)

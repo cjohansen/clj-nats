@@ -11,7 +11,7 @@
            (io.nats.client.api ObjectInfo ObjectInfo$Builder ObjectLink ObjectMeta ObjectMetaOptions ObjectStoreConfiguration ObjectStoreConfiguration$Builder ObjectStoreStatus ObjectStoreWatcher ObjectStoreWatchOption Placement StorageType)
            (io.nats.client.impl NatsObjectStoreWatchSubscription)
            (java.io ByteArrayOutputStream)
-           (java.time Duration ZonedDateTime)
+           (java.time Duration Instant ZonedDateTime)
            (java.util Map)))
 
 ;; Map data classes to maps
@@ -125,10 +125,13 @@
 (s/def :nats.object/deleted? boolean?)
 (s/def :nats.object/name string?)
 (s/def :nats.object/digest string?)
-(s/def :nats.object/modified-zdt #(instance? ZonedDateTime %))
+(s/def :nats.object/modified-at #(instance? Instant %))
 (s/def :nats.object/size-bytes number?)
 (s/def :nats.object/headers (s/map-of string? string?))
 (s/def :nats.object/nuid string?)
+
+(defn get-modified [^ObjectInfo info]
+  (Instant/from ^ZonedDateTime (ObjectInfo/.getModified info)))
 
 (def object-info-accessors
   {:nats.object/bucket {:accessor ObjectInfo/.getBucket}
@@ -138,7 +141,7 @@
    :nats.object/digest {:accessor ObjectInfo/.getDigest}
    :nats.object/headers {:accessor ObjectInfo/.getHeaders
                          :parser #'nats.message/headers->map}
-   :nats.object/modified-zdt {:accessor ObjectInfo/.getModified}
+   :nats.object/modified-at {:accessor get-modified}
    :nats.object/name {:accessor ObjectInfo/.getObjectName}
    :nats.object/nuid {:accessor ObjectInfo/.getNuid}
    :nats.object/size-bytes {:accessor ObjectInfo/.getSize}
@@ -193,7 +196,7 @@
 (defn delete
   "Delete object given its name
 
-  Idempotent except for :nats.object/modified-zdt, which may change if delete is
+  Idempotent except for :nats.object/modified-at, which may change if delete is
   called more times."
   [conn bucket ^String object-name]
   (let [object-store (Connection/.objectStore (nats/get-connection conn) bucket)]
