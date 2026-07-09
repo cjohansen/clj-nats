@@ -2,10 +2,10 @@
   "Object Store lets you store, list and watch binary large objects (BLOBs)"
   (:refer-clojure :exclude [list])
   (:require [clojure.spec.alpha :as s]
-            [nats.core :as nats]
             [nats.message :as message]
             [nats.object :as-alias object]
             [nats.object-store.watch-option :as-alias watch-option]
+            [nats.protocols :as p]
             [nats.stream :as stream])
   (:import (io.nats.client Connection ObjectStore ObjectStoreManagement ObjectStoreOptions ObjectStoreOptions$Builder)
            (io.nats.client.api ObjectInfo ObjectInfo$Builder ObjectLink ObjectMeta ObjectMetaOptions ObjectStoreConfiguration ObjectStoreConfiguration$Builder ObjectStoreStatus ObjectStoreWatcher ObjectStoreWatchOption Placement StorageType)
@@ -63,21 +63,21 @@
 
 ;; Helper functions
 
-(defn ^:no-doc bucket-management [nats-conn]
-  (let [{:keys [osbm conn object-store-options]} @nats-conn]
+(defn ^:no-doc bucket-management [conn]
+  (let [{:keys [osbm object-store-options]} (p/get-configuration conn)]
     (when-not osbm
       (->> (build-object-store-options object-store-options)
-           (Connection/.objectStoreManagement conn)
-           (swap! nats-conn assoc :osbm))))
-  (:osbm @nats-conn))
+           (Connection/.objectStoreManagement (p/get-jnats-conn conn))
+           (p/configure! conn :osbm))))
+  (:osbm (p/get-configuration conn)))
 
-(defn ^:no-doc object-store-management [nats-conn bucket-name]
-  (let [{:keys [osm conn object-store-options]} @nats-conn]
+(defn ^:no-doc object-store-management [conn bucket-name]
+  (let [{:keys [osm object-store-options]} (p/get-configuration conn)]
     (when-not (get-in osm [bucket-name])
       (->> (build-object-store-options object-store-options)
-           (Connection/.objectStore conn bucket-name)
-           (swap! nats-conn assoc-in [:osm bucket-name]))))
-  (get-in @nats-conn [:osm bucket-name]))
+           (Connection/.objectStore (p/get-jnats-conn conn) bucket-name)
+           (p/configure! conn [:osm bucket-name]))))
+  (get-in (p/get-configuration conn) [:osm bucket-name]))
 
 ;; Public API
 
@@ -93,10 +93,9 @@
   - `:nats.object-store/prefix`
   - `:nats.object-store/request-timeout`"
   [conn object-store-options]
-  (let [conn-val @conn]
-    (-> (dissoc conn-val :osm :osbm)
-        (assoc :object-store-options object-store-options)
-        atom)))
+  (p/configure! conn :osm nil)
+  (p/configure! conn :osbm nil)
+  (p/configure! conn :object-store-options object-store-options))
 
 (defn ^{:style/indent 1 :export true} create-bucket
   [conn config]
@@ -159,7 +158,7 @@
           object-info-accessors))
 
 (defn put-bytes [conn bucket ^String object-name ^bytes bytes]
-  (let [object-store (Connection/.objectStore (nats/get-connection conn) bucket)]
+  (let [object-store (Connection/.objectStore (p/get-jnats-conn conn) bucket)]
     (-> (ObjectStore/.put object-store object-name bytes)
         ObjectInfo->map)))
 
@@ -167,7 +166,7 @@
   (put-bytes conn bucket object-name (String/.getBytes s "UTF-8")))
 
 (defn get-bytes ^bytes [conn bucket ^String object-name]
-  (let [object-store (Connection/.objectStore (nats/get-connection conn) bucket)
+  (let [object-store (Connection/.objectStore (p/get-jnats-conn conn) bucket)
         buffer (ByteArrayOutputStream/new)]
     (ObjectStore/.get object-store object-name buffer)
     (ByteArrayOutputStream/.toByteArray buffer)))
@@ -178,7 +177,7 @@
 (defn list
   "List object information for all objects in bucket"
   [conn bucket]
-  (let [object-store (Connection/.objectStore (nats/get-connection conn) bucket)]
+  (let [object-store (Connection/.objectStore (p/get-jnats-conn conn) bucket)]
     (map ObjectInfo->map (ObjectStore/.getList object-store))))
 
 (defn get-info
@@ -187,7 +186,7 @@
   Pass :nats.object/include-deleted? to get information about deleted objects.
   Returns nil if no object was found. "
   [conn bucket ^String object-name & {::object/keys [include-deleted?]}]
-  (let [object-store (Connection/.objectStore (nats/get-connection conn) bucket)]
+  (let [object-store (Connection/.objectStore (p/get-jnats-conn conn) bucket)]
     (some-> (if include-deleted?
               (ObjectStore/.getInfo object-store object-name true)
               (ObjectStore/.getInfo object-store object-name))
@@ -199,7 +198,7 @@
   Idempotent except for :nats.object/modified-at, which may change if delete is
   called more times."
   [conn bucket ^String object-name]
-  (let [object-store (Connection/.objectStore (nats/get-connection conn) bucket)]
+  (let [object-store (Connection/.objectStore (p/get-jnats-conn conn) bucket)]
     (some-> (ObjectStore/.delete object-store object-name) ObjectInfo->map)))
 
 (defn seal!
@@ -208,7 +207,7 @@
   Return status for this bucket. Idempotent except for :nats.stream/timestamp
   for the backing stream. "
   [conn bucket]
-  (-> (ObjectStore/.seal (Connection/.objectStore (nats/get-connection conn) bucket))
+  (-> (ObjectStore/.seal (Connection/.objectStore (p/get-jnats-conn conn) bucket))
       object-store-status->map))
 
 (def watch-option-enums
@@ -271,7 +270,7 @@
                     (endOfData [_this]
                       (when on-end-of-data
                         (on-end-of-data)))))]
-    (ObjectStore/.watch (Connection/.objectStore (nats/get-connection conn) bucket)
+    (ObjectStore/.watch (Connection/.objectStore (p/get-jnats-conn conn) bucket)
                         watcher
                         (->> watch-options
                              (map watch-option-enums)
@@ -288,7 +287,7 @@
   bucket, nil otherwise."
   [conn bucket link-name]
   (when-let [objectLink
-             (some-> (Connection/.objectStore (nats/get-connection conn) bucket)
+             (some-> (Connection/.objectStore (p/get-jnats-conn conn) bucket)
                      (ObjectStore/.getInfo link-name)
                      ObjectInfo/.getObjectMeta
                      ObjectMeta/.getObjectMetaOptions
@@ -302,13 +301,13 @@
    (add-link conn bucket name bucket target))
   ([conn link-bucket link-name ^String target-bucket ^String target-name]
    (-> (ObjectStore/.addLink
-        (Connection/.objectStore (nats/get-connection conn) link-bucket)
+        (Connection/.objectStore (p/get-jnats-conn conn) link-bucket)
         link-name
         (ObjectInfo$Builder/.build (ObjectInfo/builder target-bucket target-name)))
        ObjectInfo->map)))
 
 (defn add-bucket-link [conn link-bucket link-name target-bucket]
   (ObjectStore/.addBucketLink
-   (Connection/.objectStore (nats/get-connection conn) link-bucket)
+   (Connection/.objectStore (p/get-jnats-conn conn) link-bucket)
    link-name
-   (Connection/.objectStore (nats/get-connection conn) target-bucket)))
+   (Connection/.objectStore (p/get-jnats-conn conn) target-bucket)))

@@ -1,8 +1,10 @@
 (ns nats.core
   (:require [clojure.set :as set]
             [clojure.string :as str]
-            [nats.message :as message])
-  (:import (io.nats.client Connection ConnectionListener ConnectionListener$Events ErrorListener Nats Options Options$Builder ReconnectDelayHandler StatisticsCollector Subscription TimeTraceLogger)
+            [nats.connection :as connection]
+            [nats.message :as message]
+            [nats.protocols :as p])
+  (:import (io.nats.client ConnectionListener ConnectionListener$Events ErrorListener Nats Options Options$Builder ReconnectDelayHandler StatisticsCollector Subscription TimeTraceLogger)
            (java.time Duration ZoneId)))
 
 (def ^:no-doc default-tz
@@ -123,7 +125,7 @@
 
     (messageDiscarded [_this _ message]
       (when (ifn? message-discarded)
-        (message-discarded conn (message/message->map @conn message))))
+        (message-discarded conn (message/message->map (p/get-configuration conn) message))))
 
     (pullStatusError [_this _ subscription status]
       (when (ifn? pull-status-error)
@@ -522,21 +524,17 @@
   - `:nats.core/use-timeout-exception?`
   - `:nats.core/verbose?`"
   [server-url-or-options & [{:keys [jet-stream-options key-value-options edn-reader-opts]}]]
-  (let [clj-conn (atom {:edn-reader-opts edn-reader-opts
-                        :jet-stream-options jet-stream-options
-                        :key-value-options key-value-options})
-        conn (if (string? server-url-or-options)
-               (Nats/connect ^String server-url-or-options)
-               (Nats/connect (build-options clj-conn server-url-or-options)))]
-    (swap! clj-conn assoc :conn conn)
-    clj-conn))
-
-(defn ^:no-doc get-connection ^Connection [conn]
-  (:conn @conn))
+  (let [configuration (atom {:edn-reader-opts edn-reader-opts
+                             :jet-stream-options jet-stream-options
+                             :key-value-options key-value-options})]
+    (connection/->Conn
+     (if (string? server-url-or-options)
+       (Nats/connect ^String server-url-or-options)
+       (Nats/connect (build-options configuration server-url-or-options)))
+     configuration)))
 
 (defn ^:export close [conn]
-  (let [jconn (get-connection conn)]
-    (.close jconn)))
+  (java.lang.AutoCloseable/.close conn))
 
 (defn ^{:style/indent 1 :export true} publish
   "Publish a message. Performs no publish acking; do not use for publishing to a
@@ -553,7 +551,7 @@
   (assert (not (nil? (::message/subject message))) "Can't publish without data")
   (assert (not (nil? (::message/data message))) "Can't publish nil data")
   (->> (message/build-message message)
-       (.publish (get-connection conn))
+       (.publish (p/get-jnats-conn conn))
        message/publish-ack->map))
 
 (defn ^{:style/indent 1 :export true} subscribe
@@ -561,11 +559,11 @@
   `nats.stream/subscribe`. Pull messages with `nats.core/pull-message`."
   [conn subject & [queue-name]]
   (atom
-   (-> (dissoc @conn :conn)
+   (-> (p/get-configuration conn)
        (assoc :subscription
               (if queue-name
-                (.subscribe (get-connection conn) subject queue-name)
-                (.subscribe (get-connection conn) subject))))))
+                (.subscribe (p/get-jnats-conn conn) subject queue-name)
+                (.subscribe (p/get-jnats-conn conn) subject))))))
 
 (defn ^:export pull-message [subscription timeout]
   (let [{:keys [^Subscription subscription] :as opt} @subscription]
@@ -598,18 +596,18 @@
    (assert (not (nil? (::message/subject message))) "Can't make request without data")
    (assert (not (nil? (::message/data message))) "Can't make request nil data")
    (future
-     (message/message->map @conn
+     (message/message->map (p/get-configuration conn)
        (->> (message/build-message (dissoc message :nats.message/reply-to))
-            (.request (get-connection conn))
+            (.request (p/get-jnats-conn conn))
             deref))))
   ([conn message timeout]
    (assert (not (nil? (::message/subject message))) "Can't make request without data")
    (assert (not (nil? (::message/data message))) "Can't make request nil data")
    (assert (or (number? timeout) (instance? Duration timeout)) "timeout should be millis (number) or Duration")
    (future
-     (message/message->map @conn
+     (message/message->map (p/get-configuration conn)
        (->> (.requestWithTimeout
-             (get-connection conn)
+             (p/get-jnats-conn conn)
              (message/build-message (dissoc message :nats.message/reply-to))
              (cond-> timeout
                (number? timeout) Duration/ofMillis))

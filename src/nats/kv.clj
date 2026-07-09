@@ -4,6 +4,7 @@
             [nats.core :as nats]
             [nats.internals :refer [->duration]]
             [nats.message :as message]
+            [nats.protocols :as p]
             [nats.stream :as stream])
   (:import (io.nats.client Connection KeyValueManagement KeyValueOptions KeyValueOptions$Builder Message)
            (io.nats.client.api External External$Builder KeyValueConfiguration KeyValueConfiguration$Builder KeyValueEntry KeyValueOperation KeyValuePurgeOptions KeyValuePurgeOptions$Builder KeyValueStatus KeyValueWatcher KeyValueWatchOption MessageInfo Mirror Mirror$Builder Placement Placement$Builder Republish Republish$Builder StorageType Source Source$Builder SubjectTransform SubjectTransform$Builder)
@@ -218,21 +219,21 @@
 
 ;; Helper functions
 
-(defn ^:no-doc bucket-management [nats-conn]
-  (let [{:keys [kvbm conn key-value-options]} @nats-conn]
+(defn ^:no-doc bucket-management [conn]
+  (let [{:keys [kvbm key-value-options]} (p/get-configuration conn)]
     (when-not kvbm
       (->> (build-kvo-options key-value-options)
-           (Connection/.keyValueManagement conn)
-           (swap! nats-conn assoc :kvbm))))
-  (:kvbm @nats-conn))
+           (Connection/.keyValueManagement (p/get-jnats-conn conn))
+           (p/configure! conn :kvbm))))
+  (:kvbm (p/get-configuration conn)))
 
-(defn ^:no-doc kv-management [nats-conn bucket-name]
-  (let [{:keys [kvm conn key-value-options]} @nats-conn]
+(defn ^:no-doc kv-management [conn bucket-name]
+  (let [{:keys [kvm key-value-options]} (p/get-configuration conn)]
     (when-not (get-in kvm [bucket-name])
       (->> (build-kvo-options key-value-options)
-           (CljNatsKeyValue/create conn bucket-name)
-           (swap! nats-conn assoc-in [:kvm bucket-name]))))
-  (get-in @nats-conn [:kvm bucket-name]))
+           (CljNatsKeyValue/create (p/get-jnats-conn conn) bucket-name)
+           (p/configure! conn [:kvm bucket-name]))))
+  (get-in (p/get-configuration conn) [:kvm bucket-name]))
 
 ;; Public API
 
@@ -248,10 +249,9 @@
   - `:nats.kv/prefix`
   - `:nats.kv/request-timeout`"
   [conn key-value-options]
-  (let [conn-val @conn]
-    (-> (dissoc conn-val :kvo :kvbm)
-        (assoc :key-value-options key-value-options)
-        atom)))
+  (p/configure! conn :kvo nil)
+  (p/configure! conn :kvbm nil)
+  (p/configure! conn :key-value-options key-value-options))
 
 (defn ^{:style/indent 1 :export true} create-bucket
   "Create a key/value bucket. `config` is a map of:
@@ -356,7 +356,7 @@
    (when-let [message-info (if rev
                              (CljNatsKeyValue/.getMessage (kv-management conn bucket-name) k rev)
                              (CljNatsKeyValue/.getMessage (kv-management conn bucket-name) k))]
-     (let [entry (message-info->key-value-entry @conn bucket-name k message-info)]
+     (let [entry (message-info->key-value-entry (p/get-configuration conn) bucket-name k message-info)]
        (when (= :nats.kv-operation/put (:nats.kv.entry/operation entry))
          entry)))))
 
@@ -428,7 +428,7 @@
    (get-history conn (namespace k) (name k)))
   ([conn bucket-name k]
    (->> (CljNatsKeyValue/.getHistory (kv-management conn bucket-name) k)
-        (map #(message->key-value-entry @conn bucket-name k %)))))
+        (map #(message->key-value-entry (p/get-configuration conn) bucket-name k %)))))
 
 (defn ^:export get-keys
   "Return a set of all the keys in the bucket as strings"

@@ -2,7 +2,8 @@
   (:require [clojure.set :as set]
             [nats.cluster :as cluster]
             [nats.core :as nats]
-            [nats.message :as message])
+            [nats.message :as message]
+            [nats.protocols :as p])
   (:import (io.nats.client Connection JetStream JetStreamManagement
                            JetStreamOptions JetStreamOptions$Builder
                            Message PublishOptions PublishOptions$Builder
@@ -309,13 +310,13 @@
 
 ;; Helper functions
 
-(defn ^:no-doc jet-stream-management ^JetStreamManagement [nats-conn]
-  (let [{:keys [jsm ^Connection conn jet-stream-options]} @nats-conn]
+(defn ^:no-doc jet-stream-management ^JetStreamManagement [conn]
+  (let [{:keys [jsm jet-stream-options]} (p/get-configuration conn)]
     (when-not jsm
       (->> (build-jet-stream-options jet-stream-options)
-           (.jetStreamManagement conn)
-           (swap! nats-conn assoc :jsm))))
-  (:jsm @nats-conn))
+           (.jetStreamManagement (p/get-jnats-conn conn))
+           (p/configure! conn :jsm))))
+  (:jsm (p/get-configuration conn)))
 
 (defn ^:no-doc get-stream-info-object ^StreamInfo
   [conn stream-name & [{:keys [include-deleted-details?
@@ -341,10 +342,8 @@
   - `:nats.stream/publish-no-ack?`
   - `:nats.stream/request-timeout`"
   [conn jet-stream-options]
-  (let [conn-val @conn]
-    (-> (dissoc conn-val :jsm)
-        (assoc :jet-stream-options jet-stream-options)
-        atom)))
+  (p/configure! conn :jsm nil)
+  (p/configure! conn :jet-stream-options jet-stream-options))
 
 (defn ^:export get-cluster-info [conn stream-name & [options]]
   (some-> (get-stream-info-object conn stream-name options)
@@ -410,22 +409,22 @@
 (defn ^:export get-first-message [conn ^String stream-name ^String subject]
   (-> (jet-stream-management conn)
       (.getFirstMessage stream-name subject)
-      (message/message-info->map @conn)))
+      (message/message-info->map (p/get-configuration conn))))
 
 (defn ^:export get-last-message [conn ^String stream-name ^String subject]
   (-> (jet-stream-management conn)
       (.getLastMessage stream-name subject)
-      (message/message-info->map @conn)))
+      (message/message-info->map (p/get-configuration conn))))
 
 (defn ^:export get-message [conn ^String stream-name ^long seq]
   (-> (jet-stream-management conn)
       (.getMessage stream-name seq)
-      (message/message-info->map @conn)))
+      (message/message-info->map (p/get-configuration conn))))
 
 (defn ^:export get-next-message [conn stream-name seq subject]
   (-> (jet-stream-management conn)
       (.getNextMessage stream-name seq subject)
-      (message/message-info->map @conn)))
+      (message/message-info->map (p/get-configuration conn))))
 
 (defn ^{:style/indent 1 :export true} create-stream
   "Adds a stream. `config` is a map of the following keys:
@@ -483,7 +482,7 @@
   (assert (not (nil? (::message/data message))) "Can't publish nil data")
   (try
     (->> ^PublishOptions (build-publish-options opts)
-         (.publish ^JetStream (.jetStream (nats/get-connection conn)) ^Message (message/build-message message))
+         (.publish ^JetStream (.jetStream (p/get-jnats-conn conn)) ^Message (message/build-message message))
          message/publish-ack->map)
     (catch java.io.IOException e
       (if (empty? (get-streams conn {:subject-filter (:nats.message/subject message)}))

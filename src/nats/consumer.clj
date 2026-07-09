@@ -4,6 +4,7 @@
             [nats.core :as nats]
             [nats.internals :refer [->duration ->durations]]
             [nats.message :as message]
+            [nats.protocols :as p]
             [nats.stream :as stream])
   (:import (io.nats.client ConsumeOptions ConsumeOptions$Builder IterableConsumer)
            (io.nats.client.api AckPolicy ConsumerConfiguration ConsumerConfiguration$Builder ConsumerInfo DeliverPolicy ReplayPolicy)
@@ -279,7 +280,7 @@
      (subscribe conn id opts {})))
   ([conn stream-name consumer-name opts]
    (atom
-    (-> (dissoc @conn :conn)
+    (-> (p/get-configuration conn)
         (assoc :subscription
                (-> (.getStreamContext (nats/get-connection conn) stream-name)
                    (.getConsumerContext consumer-name)
