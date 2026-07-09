@@ -529,7 +529,7 @@
              :nats.consumer/headers-only? false
              :nats.consumer/flow-control-was-set? false
              :nats.consumer/max-ack-pending-was-set? true
-             :nats.consumer/metadata-was-set? false
+             :nats.consumer/metadata-was-set? true
              :nats.consumer/mem-storage? false
              :nats.consumer/replicas 0
              :nats.consumer/flow-control? false
@@ -816,7 +816,8 @@
               :nats.stream/consumer-count 0
               :nats.stream/first-sequence-number 0
               :nats.stream/deleted #{}
-              :nats.stream/message-count 0}}})))
+              :nats.stream/message-count 0}}
+            :nats.kv/metadata {}})))
 
   (testing "Update bucket"
     (is (= (-> (with-kv-bucket [conn "clj-nats-test"]
