@@ -47,6 +47,10 @@
 
   java.lang.AutoCloseable
   (close [_]
+    (->> (:nats.object-store/subscriptions @state)
+         (mapcat vals)
+         (run! java.lang.AutoCloseable/.close))
+    (swap! state dissoc :nats.object-store/subscriptions)
     (.close conn))
 
   internals/NatsConnectionState
