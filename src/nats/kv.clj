@@ -6,12 +6,11 @@
             [nats.message :as message]
             [nats.protocols :as p]
             [nats.stream :as stream])
-  (:import (io.nats.client Connection KeyValueManagement KeyValueOptions KeyValueOptions$Builder Message)
-           (io.nats.client.api External External$Builder KeyValueConfiguration KeyValueConfiguration$Builder KeyValueEntry KeyValueOperation KeyValuePurgeOptions KeyValuePurgeOptions$Builder KeyValueStatus KeyValueWatcher KeyValueWatchOption MessageInfo Mirror Mirror$Builder Placement Placement$Builder Republish Republish$Builder StorageType Source Source$Builder SubjectTransform SubjectTransform$Builder)
+  (:import (io.nats.client Connection KeyValueManagement Message)
+           (io.nats.client.api External External$Builder KeyValueConfiguration KeyValueConfiguration$Builder KeyValueEntry KeyValueOperation KeyValuePurgeOptions KeyValuePurgeOptions$Builder KeyValueStatus KeyValueWatcher KeyValueWatchOption MessageInfo Mirror Mirror$Builder Placement Placement$Builder Republish Republish$Builder Source Source$Builder StorageType SubjectTransform SubjectTransform$Builder)
            (io.nats.client.impl CljNatsKeyValue)
            (io.nats.client.support NatsKeyValueUtil)
-           (java.time Duration Instant)
-           (java.util ArrayList)))
+           (java.time Instant)))
 
 ;; Enums
 
@@ -103,27 +102,6 @@
    :nats.kv.entry/value (.getValueAsString entry)})
 
 ;; Build options
-
-(defn ^:no-doc build-kvo-options ^KeyValueOptions [{::keys [stream-options domain prefix request-timeout]}]
-  (cond->
-      ^KeyValueOptions$Builder
-      (proxy [KeyValueOptions$Builder] []
-        (jetStreamOptions [options]
-          (proxy-super jetStreamOptions options))
-
-        (jsDomain [domain]
-          (proxy-super jsDomain domain))
-
-        (jsPrefix [prefix]
-          (proxy-super jsPrefix prefix))
-
-        (jsRequestTimeout [request-timeout]
-          (proxy-super jsRequestTimeout request-timeout)))
-    stream-options (.jetStreamOptions (stream/build-jet-stream-options stream-options))
-    domain (.jsDomain domain)
-    prefix (.jsPrefix prefix)
-    request-timeout (.jsRequestTimeout request-timeout)
-    :then (.build)))
 
 (defn ^:no-doc build-external-options ^External [{:nats.external/keys [api deliver]}]
   (cond-> ^External$Builder (External/builder)
@@ -220,38 +198,20 @@
 ;; Helper functions
 
 (defn ^:no-doc bucket-management [conn]
-  (let [{:keys [kvbm key-value-options]} (p/get-configuration conn)]
+  (let [{:keys [kvbm]} (p/get-configuration conn)]
     (when-not kvbm
-      (->> (build-kvo-options key-value-options)
-           (Connection/.keyValueManagement (p/get-jnats-conn conn))
+      (->> (Connection/.keyValueManagement (p/get-jnats-conn conn))
            (p/configure! conn :kvbm))))
   (:kvbm (p/get-configuration conn)))
 
 (defn ^:no-doc kv-management [conn bucket-name]
-  (let [{:keys [kvm key-value-options]} (p/get-configuration conn)]
+  (let [{:keys [kvm]} (p/get-configuration conn)]
     (when-not (get-in kvm [bucket-name])
-      (->> (build-kvo-options key-value-options)
-           (CljNatsKeyValue/create (p/get-jnats-conn conn) bucket-name)
+      (->> (CljNatsKeyValue/create (p/get-jnats-conn conn) bucket-name)
            (p/configure! conn [:kvm bucket-name]))))
   (get-in (p/get-configuration conn) [:kvm bucket-name]))
 
 ;; Public API
-
-(defn ^{:style/indent 1 :export true} configure
-  "Re-configure the KeyValue management instance. Returns a new `conn` with the
-  new configuration, does not change the original `conn`.
-
-  `key-value-options` is a map of:
-
-  - `:nats.kv/stream-options` - JetStream configuration, see
-    `nats.stream/configure` for details.
-  - `:nats.kv/domain`
-  - `:nats.kv/prefix`
-  - `:nats.kv/request-timeout`"
-  [conn key-value-options]
-  (p/configure! conn :kvo nil)
-  (p/configure! conn :kvbm nil)
-  (p/configure! conn :key-value-options key-value-options))
 
 (defn ^{:style/indent 1 :export true} create-bucket
   "Create a key/value bucket. `config` is a map of:

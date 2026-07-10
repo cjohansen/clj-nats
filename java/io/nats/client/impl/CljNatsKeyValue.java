@@ -15,8 +15,8 @@ import java.util.List;
 import static io.nats.client.support.Validator.*;
 
 public class CljNatsKeyValue extends NatsKeyValue implements KeyValue {
-    CljNatsKeyValue(NatsConnection connection, String bucketName, KeyValueOptions kvo) throws IOException {
-        super(connection, bucketName, kvo);
+    CljNatsKeyValue(NatsConnection connection, String bucketName) throws IOException {
+        super(bucketName, connection, new KeyValueOptions.Builder().build(), null);
     }
 
     public MessageInfo getMessage(String key) throws IOException, JetStreamApiException {
@@ -54,7 +54,7 @@ public class CljNatsKeyValue extends NatsKeyValue implements KeyValue {
         return list;
     }
 
-    public static CljNatsKeyValue create(Connection connection, String bucketName, KeyValueOptions options) throws IOException {
+    public static CljNatsKeyValue create(Connection connection, String bucketName) throws IOException {
         NatsConnection conn = (NatsConnection) connection;
         Validator.validateBucketName(bucketName, true);
 
@@ -62,6 +62,6 @@ public class CljNatsKeyValue extends NatsKeyValue implements KeyValue {
             throw new IOException("A JetStream context can't be established during close.");
         }
 
-        return new CljNatsKeyValue(conn, bucketName, options);
+        return new CljNatsKeyValue(conn, bucketName);
     }
 }
