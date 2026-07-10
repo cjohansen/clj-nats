@@ -1,6 +1,15 @@
 (ns nats.connection
-  (:require [nats.protocols :as p])
+  (:require [clojure.core.protocols :as cp]
+            [nats.protocols :as p])
   (:import (io.nats.client Connection)))
+
+(defn Connection->map [^Connection conn]
+  (-> (bean conn)
+      (update :clientInetAddress bean)
+      (update :serverInfo bean)
+      (update :statistics bean)
+      (update :status bean)
+      (update :options bean)))
 
 (deftype Conn [^Connection conn configuration]
   p/JNatsConnectionWrapper
@@ -19,6 +28,17 @@
           (swap! configuration update-in (butlast path) dissoc (last path)))
         (swap! configuration assoc-in path v)))
     self)
+
+  cp/Datafiable
+  (datafy [_]
+    {:conn (Connection->map conn)
+     :configuration (select-keys @configuration [:edn-reader-opts
+                                                 :jet-stream-options
+                                                 :key-value-options])})
+
+  Object
+  (toString [_]
+    (.getConnectedUrl conn))
 
   java.lang.AutoCloseable
   (close [_]
