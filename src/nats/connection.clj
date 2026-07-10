@@ -1,5 +1,6 @@
 (ns nats.connection
   (:require [clojure.core.protocols :as cp]
+            [nats.internals :as internals]
             [nats.protocols :as p])
   (:import (io.nats.client Connection)))
 
@@ -11,6 +12,15 @@
       (update :status bean)
       (update :options bean)))
 
+(defn atom-set! "assoc, assoc-in and dissoc-in in one package"
+  [atom k v]
+  (let [path (if (vector? k) k [k])]
+    (if (nil? v)
+      (if (= 1 (count path))
+        (swap! atom dissoc k)
+        (swap! atom update-in (butlast path) dissoc (last path)))
+      (swap! atom assoc-in path v))))
+
 (deftype Conn [^Connection conn configuration state]
   p/JNatsConnectionWrapper
   (get-jnats-conn [_]
@@ -21,12 +31,7 @@
     @configuration)
 
   (configure! [self k v]
-    (let [path (if (vector? k) k [k])]
-      (if (nil? v)
-        (if (= 1 (count path))
-          (swap! configuration dissoc k)
-          (swap! configuration update-in (butlast path) dissoc (last path)))
-        (swap! configuration assoc-in path v)))
+    (atom-set! configuration k v)
     self)
 
   cp/Datafiable
@@ -42,7 +47,13 @@
 
   java.lang.AutoCloseable
   (close [_]
-    (.close conn)))
+    (.close conn))
+
+  internals/NatsConnectionState
+  (get-state [_] @state)
+  (set-state! [self k v]
+    (atom-set! state k v)
+    self))
 
 (defn make-connection [jnats-conn configuration]
   (->Conn jnats-conn (atom configuration) (atom {})))

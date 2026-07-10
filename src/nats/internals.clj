@@ -19,3 +19,7 @@
 
 (defn ->durations ^Duration/1 [millis-or-duration-s]
   (into-array Duration (map ->duration millis-or-duration-s)))
+
+(defprotocol NatsConnectionState
+  (get-state [self])
+  (set-state! [self k v]))
