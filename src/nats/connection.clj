@@ -38,7 +38,7 @@
 
   Object
   (toString [_]
-    (.getConnectedUrl conn))
+    (or (.getConnectedUrl conn) "<disconnected>"))
 
   java.lang.AutoCloseable
   (close [_]
