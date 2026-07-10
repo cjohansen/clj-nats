@@ -1,10 +1,9 @@
 (ns nats.stream
   (:require [clojure.set :as set]
             [nats.cluster :as cluster]
-            [nats.core :as nats]
             [nats.message :as message]
             [nats.protocols :as p])
-  (:import (io.nats.client Connection JetStream JetStreamManagement
+  (:import (io.nats.client JetStream JetStreamManagement
                            JetStreamOptions JetStreamOptions$Builder
                            Message PublishOptions PublishOptions$Builder
                            PurgeOptions PurgeOptions$Builder)
