@@ -524,7 +524,7 @@
   - `:nats.core/verbose?`"
   [server-url-or-options & [{:keys [jet-stream-options key-value-options edn-reader-opts]}]]
   (let [connection-promise (promise)
-        conn (connection/->Conn
+        conn (connection/make-connection
               (if (string? server-url-or-options)
                 (Nats/connect ^String server-url-or-options)
                 (-> (cond-> server-url-or-options
@@ -535,9 +535,9 @@
                                   (f @connection-promise event)))))
                     build-options
                     Nats/connect))
-              (atom {:edn-reader-opts edn-reader-opts
-                     :jet-stream-options jet-stream-options
-                     :key-value-options key-value-options}))]
+              {:edn-reader-opts edn-reader-opts
+               :jet-stream-options jet-stream-options
+               :key-value-options key-value-options})]
     (deliver connection-promise conn)
     conn))
 

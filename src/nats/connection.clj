@@ -11,7 +11,7 @@
       (update :status bean)
       (update :options bean)))
 
-(deftype Conn [^Connection conn configuration]
+(deftype Conn [^Connection conn configuration state]
   p/JNatsConnectionWrapper
   (get-jnats-conn [_]
     conn)
@@ -43,3 +43,6 @@
   java.lang.AutoCloseable
   (close [_]
     (.close conn)))
+
+(defn make-connection [jnats-conn configuration]
+  (->Conn jnats-conn (atom configuration) (atom {})))
