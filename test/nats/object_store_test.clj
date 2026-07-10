@@ -236,7 +236,17 @@
           ;; get-info to wait a bit for watchers to get notified.
           (object-store/get-info connection store-name "message2.txt")
           (is (= [{::object/name "message2.txt"}]
-                 (map #(select-keys % [::object/name]) @infos))))))))
+                 (map #(select-keys % [::object/name]) @infos)))))))
+
+  (testing "list watches"
+    (prepare-fresh-bucket watch-store-name)
+    (object-store/add-watch connection watch-store-name :watcher-1 (fn [_]))
+    (object-store/add-watch connection watch-store-name :watcher-2 (fn [_]))
+    (object-store/add-watch connection watch-store-name :watcher-3 (fn [_]))
+    (is (= #{:watcher-1 :watcher-2 :watcher-3}
+           (object-store/list-watches connection watch-store-name)))
+    (run! #(object-store/remove-watch connection watch-store-name %)
+          #{:watcher-1 :watcher-2 :watcher-3})))
 
 (deftest link
   (object-store/put-str connection store-name "norge-brazil.txt" "final result: 2-1!")

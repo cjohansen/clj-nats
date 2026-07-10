@@ -299,6 +299,9 @@
           [::watch-stopped key])
       [::watch-not-running key])))
 
+(defn list-watches [conn bucket]
+  (set (keys (get-in (internals/get-state conn) [::subscriptions bucket]))))
+
 (defn resolve-link
   "Resolve links to buckets or objects
 
