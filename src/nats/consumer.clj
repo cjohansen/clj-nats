@@ -282,7 +282,7 @@
    (atom
     (-> (p/get-configuration conn)
         (assoc :subscription
-               (-> (.getStreamContext (nats/get-connection conn) stream-name)
+               (-> (.getStreamContext (p/get-jnats-conn conn) stream-name)
                    (.getConsumerContext consumer-name)
                    (.iterate (build-consume-options opts))))))))
 
