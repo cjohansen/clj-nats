@@ -14,15 +14,7 @@ The current jnats version is `2.25.3`.
 
 ## Status
 
-The API is stable but incomplete. Specifically, the object store APIs are not
-implemented.
-
-- [x] PubSub
-- [x] Streams
-- [x] Consumers
-- [x] Request/response
-- [x] Key/value store (in progress)
-- [ ] Object store
+The API is stable and complete.
 
 ## Rationale
 
@@ -365,5 +357,7 @@ make test
 
 ## License
 
-Copyright © 2024-2025 Christian Johansen Distributed under the Eclipse Public
+Copyright © 2024-2026 Christian Johansen. Distributed under the Eclipse Public
 License either version 1.0 or (at your option) any later version.
+
+clj-nats is software written for and by humans.
