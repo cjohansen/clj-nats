@@ -1,7 +1,8 @@
 (ns nats.object-store
   "Object Store lets you store, list and watch binary large objects (BLOBs)"
-  (:refer-clojure :exclude [list])
+  (:refer-clojure :exclude [list add-watch remove-watch])
   (:require [clojure.spec.alpha :as s]
+            [nats.internals :as internals]
             [nats.message :as message]
             [nats.object :as-alias object]
             [nats.object-store.watch-option :as-alias watch-option]
@@ -11,6 +12,7 @@
            (io.nats.client.api ObjectInfo ObjectInfo$Builder ObjectLink ObjectMeta ObjectMetaOptions ObjectStoreConfiguration ObjectStoreConfiguration$Builder ObjectStoreStatus ObjectStoreWatcher ObjectStoreWatchOption Placement StorageType)
            (io.nats.client.impl NatsObjectStoreWatchSubscription)
            (java.io ByteArrayOutputStream)
+           (java.lang AutoCloseable)
            (java.time Duration Instant ZonedDateTime)
            (java.util Map)))
 
@@ -226,8 +228,13 @@
    ;; > something has been put and when something has been deleted.
    })
 
-(defn watch
+(declare remove-watch)
+
+(defn add-watch
   "Watch an object store for changes via a backing NATS consumer.
+
+  `key` identifies the watcher, must be unique per object store. Pass to
+  remove-watch to stop watching.
 
   `on-change` function of a map of object information, called for each change to
   the bucket.
@@ -253,31 +260,44 @@
       ,,,)
 
   Or call object-store/unwatch when you're done."
-  ^NatsObjectStoreWatchSubscription
-  [conn bucket on-change & {:keys [on-end-of-data get-consumer-name-prefix watch-options]}]
-  (let [watcher (if get-consumer-name-prefix
-                  (reify ObjectStoreWatcher
-                    (watch [_this object-info]
-                      (on-change (ObjectInfo->map object-info)))
-                    (endOfData [_this]
-                      (when on-end-of-data
-                        (on-end-of-data)))
-                    (getConsumerNamePrefix [_this]
-                      (get-consumer-name-prefix)))
-                  (reify ObjectStoreWatcher
-                    (watch [_ object-info]
-                      (on-change (ObjectInfo->map object-info)))
-                    (endOfData [_this]
-                      (when on-end-of-data
-                        (on-end-of-data)))))]
-    (ObjectStore/.watch (Connection/.objectStore (p/get-jnats-conn conn) bucket)
-                        watcher
-                        (->> watch-options
-                             (map watch-option-enums)
-                             (into-array ObjectStoreWatchOption)))))
+  ^AutoCloseable
+  [conn bucket key on-change
+   & {:keys [on-end-of-data get-consumer-name-prefix watch-options]}]
+  (let [conn-key [::subscriptions bucket key]]
+    (when (get-in (internals/get-state conn) conn-key)
+      (throw (ex-info "watcher is already running" {:key key})))
+    (let [watcher (if get-consumer-name-prefix
+                    (reify ObjectStoreWatcher
+                      (watch [_this object-info]
+                        (on-change (ObjectInfo->map object-info)))
+                      (endOfData [_this]
+                        (when on-end-of-data
+                          (on-end-of-data)))
+                      (getConsumerNamePrefix [_this]
+                        (get-consumer-name-prefix)))
+                    (reify ObjectStoreWatcher
+                      (watch [_ object-info]
+                        (on-change (ObjectInfo->map object-info)))
+                      (endOfData [_this]
+                        (when on-end-of-data
+                          (on-end-of-data)))))
+          subscription
+          (ObjectStore/.watch (Connection/.objectStore (p/get-jnats-conn conn) bucket)
+                              watcher
+                              (->> watch-options
+                                   (map watch-option-enums)
+                                   (into-array ObjectStoreWatchOption)))]
+      (internals/set-state! conn conn-key subscription)
+      (reify AutoCloseable
+        (close [_] (remove-watch conn bucket key))))))
 
-(defn unwatch [subscription]
-  (NatsObjectStoreWatchSubscription/.close subscription))
+(defn remove-watch [conn bucket key]
+  (let [conn-key [::subscriptions bucket key]]
+    (if-let [subscription (get-in (internals/get-state conn) conn-key)]
+      (do (NatsObjectStoreWatchSubscription/.close subscription)
+          (internals/set-state! conn conn-key nil)
+          [::watch-stopped key])
+      [::watch-not-running key])))
 
 (defn resolve-link
   "Resolve links to buckets or objects

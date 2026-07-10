@@ -1,6 +1,7 @@
 (ns nats.object-store-test
   (:require [clojure.test :refer [deftest is testing]]
             [nats.core :as nats]
+            [nats.internals :as internals]
             [nats.object :as-alias object]
             [nats.object-store :as object-store]
             [nats.object-store.watch-option :as-alias watch-option])
@@ -116,6 +117,20 @@
   (object-store/create-bucket connection {:nats.object-store/bucket-name bucket-name}))
 
 (deftest watch
+  (testing "add-watch then remove-watch"
+    (prepare-fresh-bucket watch-store-name)
+    (object-store/add-watch connection watch-store-name ::watcher (fn [_info]))
+    (is (= [::object-store/watch-stopped ::watcher]
+           (object-store/remove-watch connection watch-store-name ::watcher)))
+    (is (= [::object-store/watch-not-running ::watcher]
+           (object-store/remove-watch connection watch-store-name ::watcher))))
+
+  (testing "add-watch return value supports AutoCloseable"
+    (prepare-fresh-bucket watch-store-name)
+    (with-open [_ (object-store/add-watch connection watch-store-name ::watcher (fn [_info]))])
+    (is (= [::object-store/watch-not-running ::watcher]
+           (object-store/remove-watch connection watch-store-name ::watcher))))
+
   (testing "events prior to watch start"
     (let [infos (atom [])
           on-change #(swap! infos conj %)
@@ -128,7 +143,8 @@
       (prepare-fresh-bucket watch-store-name)
       (object-store/put-str connection watch-store-name "hi1.txt" "hi there")
       (object-store/put-str connection watch-store-name "hi2.txt" "aloha")
-      (with-open [_ (object-store/watch connection watch-store-name on-change {:on-end-of-data on-end-of-data})]
+      (with-open [_ (object-store/add-watch connection watch-store-name (gensym)
+                                            on-change {:on-end-of-data on-end-of-data})]
         (deref ready?)
         (is (= '({::object/digest "SHA-256=m5ah_h1UjLvJYMxqAoZmj9dKdjZnsGNm-yMkJp_KuqQ=",
                   ::object/name "hi1.txt"}
@@ -141,7 +157,7 @@
     (let [infos (atom [])
           on-change #(swap! infos conj %)
           _ (prepare-fresh-bucket watch-store-name)]
-      (with-open [_ (object-store/watch connection watch-store-name on-change)]
+      (with-open [_ (object-store/add-watch connection watch-store-name (gensym) on-change)]
         (object-store/put-str connection watch-store-name "hi1.txt" "hi there")
         (object-store/put-str connection watch-store-name "hi2.txt" "aloha")
 
@@ -160,7 +176,7 @@
     (let [infos (atom [])
           on-change #(swap! infos conj %)
           _ (prepare-fresh-bucket watch-store-name)]
-      (with-open [_ (object-store/watch connection watch-store-name on-change)]
+      (with-open [_ (object-store/add-watch connection watch-store-name (gensym) on-change)]
         (object-store/put-str connection watch-store-name "hi1.txt" "hi there")
         (object-store/put-str connection watch-store-name "hi2.txt" "aloha")
         (object-store/list connection watch-store-name))
@@ -183,8 +199,9 @@
           (prepare-fresh-bucket watch-store-name)
           (object-store/put-str connection watch-store-name "message.txt" "ohai!")
           (object-store/delete connection watch-store-name "message.txt")
-          (with-open [_ (object-store/watch connection watch-store-name on-change
-                                            {:on-end-of-data on-end-of-data})]
+          (with-open [_ (object-store/add-watch
+                         connection watch-store-name (gensym)
+                         on-change {:on-end-of-data on-end-of-data})]
             @ready?
             (is (= [{::object/deleted? true}]
                    (mapv #(select-keys % [::object/deleted?]) @infos))))))
@@ -197,9 +214,10 @@
           (prepare-fresh-bucket watch-store-name)
           (object-store/put-str connection watch-store-name "message.txt" "ohai!")
           (object-store/delete connection watch-store-name "message.txt")
-          (with-open [_ (object-store/watch connection watch-store-name on-change
-                                            {:on-end-of-data on-end-of-data
-                                             :watch-options #{::watch-option/ignore-delete}})]
+          (with-open [_ (object-store/add-watch
+                         connection watch-store-name (gensym)
+                         on-change {:on-end-of-data on-end-of-data
+                                    :watch-options #{::watch-option/ignore-delete}})]
             @ready?
             (is (empty? (filter ::object/deleted? @infos)))))))
 
@@ -209,8 +227,10 @@
         (prepare-fresh-bucket watch-store-name)
         ;; operation before watch call -> not notified.
         (object-store/put-str connection watch-store-name "message1.txt" "ohai!")
-        (with-open [_ (object-store/watch connection watch-store-name on-change
-                                          {:watch-options #{::watch-option/updates-only}})]
+        (with-open [_ (object-store/add-watch
+                       connection watch-store-name (gensym)
+                       on-change
+                       {:watch-options #{::watch-option/updates-only}})]
           ;; operation after after watch call -> notified.
           (object-store/put-str connection watch-store-name "message2.txt" "ready for action.")
           ;; get-info to wait a bit for watchers to get notified.
