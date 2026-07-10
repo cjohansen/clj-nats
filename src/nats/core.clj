@@ -296,9 +296,8 @@
 
 (def ^:no-doc connection-event->k (set/map-invert connection-events))
 
-(defn build-options ^Options
-  [conn
-   {::keys [auth-handler ;; AuthHandler
+(defn ^:no-doc build-options ^Options
+  [{::keys [auth-handler ;; AuthHandler
             buffer-size
             client-side-limit-checks
             connection-listener ;; fn
@@ -373,7 +372,7 @@
     connection-listener (.connectionListener
                          (reify ConnectionListener
                            (connectionEvent [_this _ event]
-                             (connection-listener conn (connection-event->k event)))))
+                             (connection-listener (connection-event->k event)))))
     connection-name (.connectionName connection-name)
     (int? connection-timeout) (.connectionTimeout ^long connection-timeout)
     (instance? java.time.Duration connection-timeout) (.connectionTimeout ^java.time.Duration connection-timeout)
@@ -524,14 +523,23 @@
   - `:nats.core/use-timeout-exception?`
   - `:nats.core/verbose?`"
   [server-url-or-options & [{:keys [jet-stream-options key-value-options edn-reader-opts]}]]
-  (let [configuration (atom {:edn-reader-opts edn-reader-opts
-                             :jet-stream-options jet-stream-options
-                             :key-value-options key-value-options})]
-    (connection/->Conn
-     (if (string? server-url-or-options)
-       (Nats/connect ^String server-url-or-options)
-       (Nats/connect (build-options configuration server-url-or-options)))
-     configuration)))
+  (let [connection-promise (promise)
+        conn (connection/->Conn
+              (if (string? server-url-or-options)
+                (Nats/connect ^String server-url-or-options)
+                (-> (cond-> server-url-or-options
+                      (::connection-listener server-url-or-options)
+                      (update ::connection-listener
+                              (fn [f]
+                                (fn [event]
+                                  (f @connection-promise event)))))
+                    build-options
+                    Nats/connect))
+              (atom {:edn-reader-opts edn-reader-opts
+                     :jet-stream-options jet-stream-options
+                     :key-value-options key-value-options}))]
+    (deliver connection-promise conn)
+    conn))
 
 (defn ^:export close [conn]
   (java.lang.AutoCloseable/.close conn))
