@@ -1,7 +1,6 @@
 (ns nats.object-store-test
   (:require [clojure.test :refer [deftest is testing]]
             [nats.core :as nats]
-            [nats.internals :as internals]
             [nats.object :as-alias object]
             [nats.object-store :as object-store]
             [nats.object-store.watch-option :as-alias watch-option])
