@@ -136,12 +136,18 @@ Observe that it took more space than our hello world (479950 vs 15 bytes), and w
 
 ```clojure
 (fs/write-bytes "the-tree.jpg" (object-store/get-bytes connection bucket "171_Magnolien.JPG"))
-
-(map fs/size ["171_Magnolien.JPG" "the-tree.jpg"])
-;; => (479950 479950)
 ```
 
-Storing the image in Object Store did not alter its file size.
+Are the files equal?
+
+```clojure
+(import '(java.util Arrays))
+(Arrays/equals ^bytes (fs/read-all-bytes "171_Magnolien.JPG")
+               ^bytes (fs/read-all-bytes "the-tree.jpg"))
+;; => true
+```
+
+Yes.
 Nice!
 
 ## Watching for changes
