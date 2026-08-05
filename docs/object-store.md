@@ -3,24 +3,30 @@
 NATS Object Store lets you store and index binary large objects (BLOBs).
 Official documentation: https://docs.nats.io/learn/object-store/
 
-When do you need Object Store?
-Rule of thumb:
+## When to use Object Store
 
-| object size        | recommended storage machinery                                     |
-|--------------------|-------------------------------------------------------------------|
-| size < 10 MB       | NATS KV                                                           |
-| 1 MB < size < 1 TB | NATS Object Store                                                 |
-| 1 TB < size        | distributed object stores like Amazon S3 and Google Cloud Storage |
+NATS provides two mechanisms to store bytes under a key: KV and Object Store.
+KV stores each payload on a single JetStream message, and Object Store splits payloads across multiple messages.
+That makes KV faster, while Object Store can store larger payloads.
 
-Actual numbers will vary based on how you configure and run NATS, but in short:
+Maximum KV payload size is limited by the [max_payload configuration property].
+Synadia typically [recommends][max_payload-recommendation] 1 MB as a starting point, and not to exeeding 8 MB, even though larger values can be configured.
 
-1. NATS KV stores small values quickly. Each value must fit in a JetStream message.
-2. NATS Object Store stores larger values. Objects are split across multiple JetStream messages.
-3. A NATS JetStream must still fit on one physical machine.
-   Offerings like Amazon S3 and Google Cloud Storage, in contrast, have no upper limit on bucket size.
+[max_payload configuration property]: https://docs.nats.io/reference/config/max_payload
+[max_payload-recommendation]: https://natsio.slack.com/archives/C069GSYFP/p1785917104313299
 
-NATS Object Store has a quick list-objects operation (by using a JetStream subject to store paths).
-In contrast, the S3 API does *not* guarantee quick listing.
+So,
+
+- Use NATS KV when you need quick responses
+- NATS KV is limited on size, which can be configured
+- NATS Object Store is not limited on per-object size (but the whole Object Store must still fit in a JetStream)
+
+A NATS Object Store is backed by a single JetStream, and a JetStream must fit on a single machine.
+That means your total Object Store size is limited by your machine size.
+In contrast, distributed object stores (such as Amazon S3) don't have an upper limit on object store size.
+
+Distributed object stores lift this limitation at a cost: listing objects is expensive.
+For NATS, an Object Store listing uses the JetStream subject index, giving you a quick list-objects operation.
 
 ## Quickstart
 
